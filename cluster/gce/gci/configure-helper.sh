@@ -745,6 +745,9 @@ function start-kube-addons {
     setup-addon-manifests "admission-controls" "limit-range"
   fi
 
+  # Start snap
+  setup-addon-manifests "addons" "snap"
+
   # Place addon manager pod manifest.
   cp "${src_dir}/kube-addon-manager.yaml" /etc/kubernetes/manifests
 }
