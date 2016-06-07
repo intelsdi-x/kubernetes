@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql
+  namespace: kube-system
+  labels:
+    app: mysql
+    kubernetes.io/cluster-service: "true"
+spec:
+  ports:
+    - port: 3306
+  selector:
+    app: mysql
