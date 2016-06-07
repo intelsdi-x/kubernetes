@@ -24,6 +24,8 @@ spec:
             name: docker-sock
           - mountPath: /var/lib/docker
             name: fs-stats
+          - mountPath: /usr/local/bin/docker
+            name: docker
           - mountPath: /proc_host
             name: proc
         ports:
@@ -46,6 +48,9 @@ spec:
         - name: fs-stats
           hostPath:
             path: /var/lib/docker
+        - name: docker
+          hostPath:
+            path: /usr/bin/docker
         - name: proc
           hostPath:
             path: /proc
