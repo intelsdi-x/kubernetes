@@ -76,5 +76,8 @@ fi
 echo -e "Done, listing cluster services:\n" >&2
 "${KUBE_ROOT}/cluster/kubectl.sh" cluster-info
 echo
+echo -e "Creating ConfigMap for snap... " >&2
+"${KUBE_ROOT}/cluster/kubectl.sh" create configmap snap-config --from-literal=tribe.seed=${MASTER_INT_IP} --from-literal=tribe.nodes="4" --namespace="kube-system"
+echo
 
 exit 0

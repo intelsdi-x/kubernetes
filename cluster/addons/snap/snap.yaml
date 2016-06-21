@@ -16,7 +16,22 @@ spec:
       hostNetwork: true
       containers:
       - name: snap
-        image: gcr.io/snap4kube-1/snap
+        image: gcr.io/snap-andrzej/snap
+        env:
+          - name: SNAP_SEED_IP
+            valueFrom:
+              configMapKeyRef:
+                name: snap-config
+                key: tribe.seed
+          - name: SNAP_TRIBE_NODES
+            valueFrom:
+              configMapKeyRef:
+                name: snap-config
+                key: tribe.nodes
+          - name: MY_POD_IP
+            valueFrom:
+              fieldRef:
+                fieldPath: status.podIP
         volumeMounts:
           - mountPath: /sys/fs/cgroup
             name: cgroup

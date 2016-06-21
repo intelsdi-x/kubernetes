@@ -36,7 +36,7 @@ spec:
           volumeMounts:
           - name: influxdb-persistent-storage
             mountPath: /data
-        - image: gcr.io/snap4kube-1/grafana-snap
+        - image: gcr.io/snap-andrzej/grafana-snap
           name: grafana
           env:
           resources:
