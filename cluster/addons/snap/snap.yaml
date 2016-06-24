@@ -16,7 +16,7 @@ spec:
       hostNetwork: true
       containers:
       - name: snap
-        image: gcr.io/snap-andrzej/snap
+        image: gcr.io/snap4kube-1/snap
         env:
           - name: SNAP_SEED_IP
             valueFrom:
