@@ -386,6 +386,11 @@ func (kl *Kubelet) setNodeStatusMachineInfo(node *api.Node) {
 		node.Status.NodeInfo.BootID = info.BootID
 	}
 
+	// Add custom resources.
+	for rName, rCap := range kl.customScalarResources {
+		node.Status.Capacity[api.ResourceName(rName)] = rCap
+	}
+
 	// Set Allocatable.
 	node.Status.Allocatable = make(api.ResourceList)
 	for k, v := range node.Status.Capacity {

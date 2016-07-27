@@ -317,6 +317,10 @@ type KubeletConfiguration struct {
 	MaxPods int32 `json:"maxPods"`
 	// nvidiaGPUs is the number of NVIDIA GPU devices on this node.
 	NvidiaGPUs int32 `json:"nvidiaGPUs"`
+	// Custom scalar resource names and quantities for this node to advertise as
+	// part of its capacity, as a comma-separated list of name=quantity pairs.
+	// For example: --custom-scalar-resources=bananas=10,apples=100Mi
+	CustomScalarResources string `json:"customScalarResources"`
 	// dockerExecHandlerName is the handler to use when executing a command
 	// in a container. Valid values are 'native' and 'nsenter'. Defaults to
 	// 'native'.

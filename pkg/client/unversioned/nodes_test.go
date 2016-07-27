@@ -131,6 +131,42 @@ func TestCreateNode(t *testing.T) {
 	c.Validate(t, receivedNode, err)
 }
 
+func TestCreateNodeWithCustomResources(t *testing.T) {
+	requestNode := &api.Node{
+		ObjectMeta: api.ObjectMeta{
+			Name: "node-1",
+		},
+		Status: api.NodeStatus{
+			Capacity: api.ResourceList{
+				api.ResourceCPU:            resource.MustParse("1000m"),
+				api.ResourceMemory:         resource.MustParse("1Mi"),
+				api.ResourceName("custom"): resource.MustParse("100"),
+			},
+		},
+		Spec: api.NodeSpec{
+			Unschedulable: false,
+		},
+	}
+	c := &simple.Client{
+		Request: simple.Request{
+			Method: "POST",
+			Path:   testapi.Default.ResourcePath(getNodesResourceName(), "", ""),
+			Body:   requestNode},
+		Response: simple.Response{
+			StatusCode: 200,
+			Body:       requestNode,
+		},
+	}
+	receivedNode, err := c.Setup(t).Nodes().Create(requestNode)
+	defer c.Close()
+	c.Validate(t, receivedNode, err)
+	customResource := receivedNode.Status.Capacity["custom"]
+	// Quantity.Cmp returns zero if the argument is equal.
+	if customResource.Cmp(resource.MustParse("100")) != 0 {
+		t.Errorf("Created node did not match expected custom resource value")
+	}
+}
+
 func TestDeleteNode(t *testing.T) {
 	c := &simple.Client{
 		Request: simple.Request{
