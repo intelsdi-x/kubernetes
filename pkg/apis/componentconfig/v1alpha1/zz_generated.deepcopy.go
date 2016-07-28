@@ -274,6 +274,7 @@ func DeepCopy_v1alpha1_KubeletConfiguration(in interface{}, out interface{}, c *
 		out.BabysitDaemons = in.BabysitDaemons
 		out.MaxPods = in.MaxPods
 		out.NvidiaGPUs = in.NvidiaGPUs
+		out.CustomScalarResources = in.CustomScalarResources
 		out.DockerExecHandlerName = in.DockerExecHandlerName
 		out.PodCIDR = in.PodCIDR
 		out.ResolverConfig = in.ResolverConfig

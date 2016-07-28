@@ -71,3 +71,55 @@ func TestValueOfAllocatableResources(t *testing.T) {
 		}
 	}
 }
+
+func TestValueOfCustomResources(t *testing.T) {
+	testCases := []struct {
+		flagValue     string
+		errorExpected bool
+		expectedLen   int
+		name          string
+	}{
+		{
+			flagValue:     "",
+			errorExpected: false,
+			expectedLen:   0,
+			name:          "empty flag value",
+		},
+		{
+			flagValue:     "apples=4Gi",
+			errorExpected: false,
+			expectedLen:   1,
+			name:          "valid single custom resource",
+		},
+		{
+			flagValue:     "apples=4Gi,bananas=100",
+			errorExpected: false,
+			expectedLen:   2,
+			name:          "valid custom resources",
+		},
+		{
+			flagValue:     "apples:4Gi,bananas:100",
+			errorExpected: true,
+			name:          "valid custom resources",
+		},
+	}
+
+	for _, test := range testCases {
+		parsedResources, err := parseCustomResources(test.flagValue)
+		if err != nil {
+			t.Logf("%s: error returned: %v", test.name, err)
+		}
+		if test.errorExpected {
+			if err == nil {
+				t.Errorf("%s: error expected", test.name)
+			}
+		} else {
+			if err != nil {
+				t.Errorf("%s: unexpected error: %v", test.name, err)
+			}
+			if parsedResources == nil || len(parsedResources) != test.expectedLen {
+				t.Errorf("%s: unexpected map length (expected %d, found %d)", test.name, test.expectedLen, len(parsedResources))
+			}
+		}
+	}
+}

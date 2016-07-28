@@ -36,6 +36,7 @@ import (
 	cadvisorapi "github.com/google/cadvisor/info/v1"
 	"k8s.io/kubernetes/pkg/api"
 	utilpod "k8s.io/kubernetes/pkg/api/pod"
+	"k8s.io/kubernetes/pkg/api/resource"
 	"k8s.io/kubernetes/pkg/api/unversioned"
 	"k8s.io/kubernetes/pkg/api/validation"
 	"k8s.io/kubernetes/pkg/apis/componentconfig"
@@ -218,6 +219,7 @@ func NewMainKubelet(
 	maxPods int,
 	podsPerCore int,
 	nvidiaGPUs int,
+	customScalarResources map[string]resource.Quantity,
 	dockerExecHandler dockertools.ExecHandler,
 	resolverConfig string,
 	cpuCFSQuota bool,
@@ -346,6 +348,7 @@ func NewMainKubelet(
 		maxPods:                    maxPods,
 		podsPerCore:                podsPerCore,
 		nvidiaGPUs:                 nvidiaGPUs,
+		customScalarResources:      customScalarResources,
 		syncLoopMonitor:            atomic.Value{},
 		resolverConfig:             resolverConfig,
 		cpuCFSQuota:                cpuCFSQuota,
@@ -734,6 +737,9 @@ type Kubelet struct {
 
 	// Number of NVIDIA GPUs on this node
 	nvidiaGPUs int
+
+	// Custom scalar resources available on this node.
+	customScalarResources map[string]resource.Quantity
 
 	// Monitor Kubelet's sync loop
 	syncLoopMonitor atomic.Value
