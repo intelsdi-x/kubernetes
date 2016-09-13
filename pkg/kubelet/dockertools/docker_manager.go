@@ -406,6 +406,7 @@ func (dm *DockerManager) inspectContainer(id string, podName, podNamespace strin
 		ExitCode:     iResult.State.ExitCode,
 		CreatedAt:    createdAt,
 		Hash:         hash,
+		CPUShares:    iResult.HostConfig.Resources.CPUShares,
 	}
 	if iResult.State.Running {
 		// Container that are running, restarting and paused
@@ -556,6 +557,61 @@ func makePortsAndBindings(portMappings []kubecontainer.PortMapping) (map[dockern
 		}
 	}
 	return exposedPorts, portBindings
+}
+
+func (dm *DockerManager) updateContainer(
+	pod *api.Pod,
+	container *api.Container,
+	dockerID kubecontainer.DockerID) error {
+	memoryLimit := container.Resources.Limits.Memory().Value()
+	cpuRequest := container.Resources.Requests.Cpu()
+	cpuLimit := container.Resources.Limits.Cpu()
+	nvidiaGPULimit := container.Resources.Limits.NvidiaGPU()
+	var cpuShares int64
+	// If request is not specified, but limit is, we want request to default to limit.
+	// API server does this for new containers, but we repeat this logic in Kubelet
+	// for containers running on existing Kubernetes clusters.
+	if cpuRequest.IsZero() && !cpuLimit.IsZero() {
+		cpuShares = milliCPUToShares(cpuLimit.MilliValue())
+	} else {
+		// if cpuRequest.Amount is nil, then milliCPUToShares will return the minimal number
+		// of CPU shares.
+		cpuShares = milliCPUToShares(cpuRequest.MilliValue())
+	}
+	var devices []dockercontainer.DeviceMapping
+	if nvidiaGPULimit.Value() != 0 {
+		// Experimental. For now, we hardcode /dev/nvidia0 no matter what the user asks for
+		// (we only support one device per node).
+		devices = []dockercontainer.DeviceMapping{
+			{PathOnHost: "/dev/nvidia0", PathInContainer: "/dev/nvidia0", CgroupPermissions: "mrw"},
+			{PathOnHost: "/dev/nvidiactl", PathInContainer: "/dev/nvidiactl", CgroupPermissions: "mrw"},
+			{PathOnHost: "/dev/nvidia-uvm", PathInContainer: "/dev/nvidia-uvm", CgroupPermissions: "mrw"},
+		}
+	}
+
+	uc := dockercontainer.UpdateConfig{
+		Resources: dockercontainer.Resources{
+			Memory:     memoryLimit,
+			MemorySwap: -1,
+			CPUShares:  cpuShares,
+			Devices:    devices,
+		},
+	}
+
+	ref, err := kubecontainer.GenerateContainerRef(pod, container)
+	if err != nil {
+		glog.Errorf("Can't make a ref to pod %v, container %v: '%v'", pod.Name, container.Name, err)
+	} else {
+		glog.V(5).Infof("Generating ref for container %s: %#v", container.Name, ref)
+	}
+
+	if err = dm.client.UpdateContainer(string(dockerID), uc); err != nil {
+		dm.recorder.Eventf(ref, api.EventTypeWarning, events.FailedToStartContainer,
+			"Failed to Update container with docker id %v with error: %v", dockerID, err)
+		return err
+	}
+
+	return nil
 }
 
 func (dm *DockerManager) runContainer(
@@ -1872,6 +1928,7 @@ type podContainerChangesSpec struct {
 	InitContainersToKeep map[kubecontainer.DockerID]int
 	ContainersToStart    map[int]string
 	ContainersToKeep     map[kubecontainer.DockerID]int
+	ContainersToUpdate   map[kubecontainer.DockerID]int
 }
 
 func (dm *DockerManager) computePodContainerChanges(pod *api.Pod, podStatus *kubecontainer.PodStatus) (podContainerChangesSpec, error) {
@@ -1882,6 +1939,7 @@ func (dm *DockerManager) computePodContainerChanges(pod *api.Pod, podStatus *kub
 	glog.V(5).Infof("Syncing Pod %q: %#v", format.Pod(pod), pod)
 
 	containersToStart := make(map[int]string)
+	containersToUpdate := make(map[kubecontainer.DockerID]int)
 	containersToKeep := make(map[kubecontainer.DockerID]int)
 
 	var err error
@@ -1984,6 +2042,22 @@ func (dm *DockerManager) computePodContainerChanges(pod *api.Pod, podStatus *kub
 		// We will look for changes and check healthiness for the container.
 		containerChanged := hash != 0 && hash != expectedHash
 		if containerChanged {
+			expectedCPURequest := container.Resources.Requests.Cpu()
+			expectedCPULimit := container.Resources.Limits.Cpu()
+			var expectedCPUShares int64
+			if expectedCPURequest.IsZero() && !expectedCPULimit.IsZero() {
+				expectedCPUShares = milliCPUToShares(expectedCPULimit.MilliValue())
+			} else {
+				expectedCPUShares = milliCPUToShares(expectedCPURequest.MilliValue())
+			}
+
+			if containerStatus.CPUShares != expectedCPUShares {
+				message := fmt.Sprintf("pod %q container %q hash changed (%d vs %d), it will be updated with the new CPUShares.", format.Pod(pod), container.Name, hash, expectedHash)
+				glog.Info(message)
+				containersToUpdate[containerID] = index
+				continue
+			}
+
 			message := fmt.Sprintf("pod %q container %q hash changed (%d vs %d), it will be killed and re-created.", format.Pod(pod), container.Name, hash, expectedHash)
 			glog.Info(message)
 			containersToStart[index] = message
@@ -2022,6 +2096,7 @@ func (dm *DockerManager) computePodContainerChanges(pod *api.Pod, podStatus *kub
 		InitContainersToKeep: initContainersToKeep,
 		ContainersToStart:    containersToStart,
 		ContainersToKeep:     containersToKeep,
+		ContainersToUpdate:   containersToUpdate,
 	}, nil
 }
 
@@ -2042,8 +2117,8 @@ func (dm *DockerManager) SyncPod(pod *api.Pod, _ api.PodStatus, podStatus *kubec
 	if containerChanges.InfraChanged {
 		dm.recorder.Eventf(pod, api.EventTypeNormal, "InfraChanged", "Pod infrastructure changed, it will be killed and re-created.")
 	}
-	if containerChanges.StartInfraContainer || (len(containerChanges.ContainersToKeep) == 0 && len(containerChanges.ContainersToStart) == 0) {
-		if len(containerChanges.ContainersToKeep) == 0 && len(containerChanges.ContainersToStart) == 0 {
+	if containerChanges.StartInfraContainer || (len(containerChanges.ContainersToKeep) == 0 && len(containerChanges.ContainersToUpdate) == 0 && len(containerChanges.ContainersToStart) == 0) {
+		if len(containerChanges.ContainersToKeep) == 0 && len(containerChanges.ContainersToUpdate) == 0 && len(containerChanges.ContainersToStart) == 0 {
 			glog.V(4).Infof("Killing Infra Container for %q because all other containers are dead.", format.Pod(pod))
 		} else {
 			glog.V(4).Infof("Killing Infra Container for %q, will start new one", format.Pod(pod))
@@ -2061,8 +2136,9 @@ func (dm *DockerManager) SyncPod(pod *api.Pod, _ api.PodStatus, podStatus *kubec
 		runningContainerStatues := podStatus.GetRunningContainerStatuses()
 		for _, containerStatus := range runningContainerStatues {
 			_, keep := containerChanges.ContainersToKeep[kubecontainer.DockerID(containerStatus.ID.ID)]
+			_, update := containerChanges.ContainersToUpdate[kubecontainer.DockerID(containerStatus.ID.ID)]
 			_, keepInit := containerChanges.InitContainersToKeep[kubecontainer.DockerID(containerStatus.ID.ID)]
-			if !keep && !keepInit {
+			if !keep && !update && !keepInit {
 				glog.V(3).Infof("Killing unwanted container %q(id=%q) for pod %q", containerStatus.Name, containerStatus.ID, format.Pod(pod))
 				// attempt to find the appropriate container policy
 				var podContainer *api.Container
@@ -2226,6 +2302,20 @@ func (dm *DockerManager) SyncPod(pod *api.Pod, _ api.PodStatus, podStatus *kubec
 		// init container still running
 		glog.V(4).Infof("Not all init containers have succeeded for pod %v", format.Pod(pod))
 		return
+	}
+
+	// Update regular containers
+	for cid, idx := range containerChanges.ContainersToUpdate {
+		container := &pod.Spec.Containers[idx]
+		updateContainerResult := kubecontainer.NewSyncResult(kubecontainer.UpdateContainer, container.Name)
+		result.AddSyncResult(updateContainerResult)
+
+		glog.V(4).Infof("Updating container %+v in pod %v", container, format.Pod(pod))
+		if err := dm.updateContainer(pod, container, cid); err != nil {
+			updateContainerResult.Fail(err, err.Error())
+			utilruntime.HandleError(fmt.Errorf("container update failed: %v: %s", err, err.Error()))
+			continue
+		}
 	}
 
 	// Start regular containers
