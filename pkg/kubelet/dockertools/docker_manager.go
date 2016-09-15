@@ -45,6 +45,7 @@ import (
 	"k8s.io/kubernetes/pkg/api/unversioned"
 	"k8s.io/kubernetes/pkg/client/record"
 	kubecontainer "k8s.io/kubernetes/pkg/kubelet/container"
+	"k8s.io/kubernetes/pkg/kubelet/container/hook"
 	"k8s.io/kubernetes/pkg/kubelet/events"
 	"k8s.io/kubernetes/pkg/kubelet/images"
 	"k8s.io/kubernetes/pkg/kubelet/lifecycle"
@@ -182,6 +183,9 @@ type DockerManager struct {
 
 	// Directory to host local seccomp profiles.
 	seccompProfileRoot string
+
+	// Container lifecycle event hook callbacks.
+	containerHooks []hook.ContainerEventHooks
 }
 
 // A subset of the pod.Manager interface extracted for testing purposes.
@@ -225,6 +229,7 @@ func NewDockerManager(
 	enableCustomMetrics bool,
 	hairpinMode bool,
 	seccompProfileRoot string,
+	containerHooks []hook.ContainerEventHooks,
 	options ...kubecontainer.Option) *DockerManager {
 	// Wrap the docker client with instrumentedDockerInterface
 	client = NewInstrumentedDockerInterface(client)
@@ -262,6 +267,7 @@ func NewDockerManager(
 		configureHairpinMode:   hairpinMode,
 		imageStatsProvider:     newImageStatsProvider(client),
 		seccompProfileRoot:     seccompProfileRoot,
+		containerHooks:         containerHooks,
 	}
 	dm.runner = lifecycle.NewHandlerRunner(httpClient, dm, dm)
 	dm.imagePuller = images.NewImageManager(kubecontainer.FilterEventRecorder(recorder), dm, imageBackOff, serializeImagePulls)
@@ -725,6 +731,12 @@ func (dm *DockerManager) runContainer(
 	securityContextProvider := securitycontext.NewSimpleSecurityContextProvider()
 	securityContextProvider.ModifyContainerConfig(pod, container, dockerOpts.Config)
 	securityContextProvider.ModifyHostConfig(pod, container, dockerOpts.HostConfig, supplementalGids)
+
+	for _, h := range dm.containerHooks {
+		glog.Infof("Invoking PreCreate callback for hook: %s", h.Name())
+		h.PreCreate(pod, container, &dockerOpts)
+	}
+
 	createResp, err := dm.client.CreateContainer(dockerOpts)
 	if err != nil {
 		dm.recorder.Eventf(ref, api.EventTypeWarning, events.FailedToCreateContainer, "Failed to create docker container %q of pod %q with error: %v", container.Name, format.Pod(pod), err)
@@ -735,12 +747,22 @@ func (dm *DockerManager) runContainer(
 	}
 	dm.recorder.Eventf(ref, api.EventTypeNormal, events.CreatedContainer, "Created container with docker id %v", utilstrings.ShortenString(createResp.ID, 12))
 
+	for _, h := range dm.containerHooks {
+		glog.Infof("Invoking PreStart callback for hook: %s", h.Name())
+		h.PreStart(pod, container, &dockerOpts)
+	}
+
 	if err = dm.client.StartContainer(createResp.ID); err != nil {
 		dm.recorder.Eventf(ref, api.EventTypeWarning, events.FailedToStartContainer,
 			"Failed to start container with docker id %v with error: %v", utilstrings.ShortenString(createResp.ID, 12), err)
 		return kubecontainer.ContainerID{}, err
 	}
 	dm.recorder.Eventf(ref, api.EventTypeNormal, events.StartedContainer, "Started container with docker id %v", utilstrings.ShortenString(createResp.ID, 12))
+
+	for _, h := range dm.containerHooks {
+		glog.Infof("Invoking PostStart callback for hook: %s", h.Name())
+		h.PostStart(pod, container, &dockerOpts)
+	}
 
 	return kubecontainer.DockerID(createResp.ID).ContainerID(), nil
 }

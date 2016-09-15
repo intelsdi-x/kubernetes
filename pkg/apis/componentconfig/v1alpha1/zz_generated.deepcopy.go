@@ -409,6 +409,13 @@ func DeepCopy_v1alpha1_KubeletConfiguration(in interface{}, out interface{}, c *
 		} else {
 			out.AllowedUnsafeSysctls = nil
 		}
+		if in.ContainerHookPaths != nil {
+			in, out := &in.ContainerHookPaths, &out.ContainerHookPaths
+			*out = make([]string, len(*in))
+			copy(*out, *in)
+		} else {
+			out.ContainerHookPaths = nil
+		}
 		return nil
 	}
 }

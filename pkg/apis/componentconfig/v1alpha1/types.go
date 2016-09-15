@@ -477,4 +477,7 @@ type KubeletConfiguration struct {
 	// Whitelist of unsafe sysctls or sysctl patterns (ending in *). Use these at your own risk.
 	// Resource isolation might be lacking and pod might influence each other on the same node.
 	AllowedUnsafeSysctls []string `json:"allowedUnsafeSysctls,omitempty"`
+	// Paths to Docker container lifecycle hook programs. Kubelet will invoke the
+	// hooks synchronously, in argument-order for each event.
+	ContainerHookPaths []string `json:"containerHookPaths",omitempty"`
 }
