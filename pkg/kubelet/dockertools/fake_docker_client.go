@@ -54,6 +54,7 @@ type FakeDockerClient struct {
 	// Created, Stopped and Removed all container docker ID
 	Created         []string
 	Started         []string
+	Updated         []string
 	Stopped         []string
 	Removed         []string
 	VersionInfo     dockertypes.Version
@@ -379,6 +380,17 @@ func (f *FakeDockerClient) StartContainer(id string) error {
 	f.ContainerMap[id] = container
 	f.updateContainerStatus(id, statusRunningPrefix)
 	f.normalSleep(200, 50, 50)
+	return nil
+}
+
+func (f *FakeDockerClient) UpdateContainer(id string, uc dockercontainer.UpdateConfig) error {
+	f.Lock()
+	defer f.Unlock()
+	f.called = append(f.called, calledDetail{name: "update"})
+	if err := f.popError("update"); err != nil {
+		return err
+	}
+	f.Updated = append(f.Updated, id)
 	return nil
 }
 

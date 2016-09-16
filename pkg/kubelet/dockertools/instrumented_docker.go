@@ -20,6 +20,7 @@ import (
 	"time"
 
 	dockertypes "github.com/docker/engine-api/types"
+	dockercontainer "github.com/docker/engine-api/types/container"
 	"k8s.io/kubernetes/pkg/kubelet/metrics"
 )
 
@@ -85,6 +86,15 @@ func (in instrumentedDockerInterface) StartContainer(id string) error {
 	defer recordOperation(operation, time.Now())
 
 	err := in.client.StartContainer(id)
+	recordError(operation, err)
+	return err
+}
+
+func (in instrumentedDockerInterface) UpdateContainer(id string, uc dockercontainer.UpdateConfig) error {
+	const operation = "update_container"
+	defer recordOperation(operation, time.Now())
+
+	err := in.client.UpdateContainer(id, uc)
 	recordError(operation, err)
 	return err
 }

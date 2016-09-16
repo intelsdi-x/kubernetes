@@ -307,6 +307,8 @@ type ContainerStatus struct {
 	// Message written by the container before exiting (stored in
 	// TerminationMessagePath).
 	Message string
+	// CPUshare currently used by the container.
+	CPUShares int64
 }
 
 // FindContainerStatusByName returns container status in the pod status with the given name.
