@@ -421,6 +421,9 @@ type KubeletConfiguration struct {
 	IPTablesDropBit int32 `json:"iptablesDropBit"`
 	// Whitelist of unsafe sysctls or sysctl patterns (ending in *).
 	AllowedUnsafeSysctls []string `json:"experimentalAllowedUnsafeSysctls,omitempty"`
+	// Paths to Docker container lifecycle hook programs. Kubelet will invoke the
+	// hooks synchronously, in argument-order for each event.
+	ContainerHookPaths []string `json:"containerHookPaths",omitempty"`
 }
 
 type KubeSchedulerConfiguration struct {

@@ -51,6 +51,7 @@ import (
 	"k8s.io/kubernetes/pkg/kubelet/cm"
 	"k8s.io/kubernetes/pkg/kubelet/config"
 	kubecontainer "k8s.io/kubernetes/pkg/kubelet/container"
+	"k8s.io/kubernetes/pkg/kubelet/container/hook"
 	"k8s.io/kubernetes/pkg/kubelet/dockertools"
 	"k8s.io/kubernetes/pkg/kubelet/envvars"
 	"k8s.io/kubernetes/pkg/kubelet/events"
@@ -542,6 +543,12 @@ func NewMainKubelet(kubeCfg *componentconfig.KubeletConfiguration, kubeDeps *Kub
 		}
 	}
 
+	// Construct container event hooks from configured hook program paths.
+	containerHooks := []hook.ContainerEventHooks{}
+	for _, prog := range kubeCfg.ContainerHookPaths {
+		containerHooks = append(containerHooks, hook.NewScriptContainerEventHooks(prog))
+	}
+
 	// Initialize the runtime.
 	switch kubeCfg.ContainerRuntime {
 	case "docker":
@@ -576,6 +583,7 @@ func NewMainKubelet(kubeCfg *componentconfig.KubeletConfiguration, kubeDeps *Kub
 			// runtime to set the flag instead.
 			klet.hairpinMode == componentconfig.HairpinVeth && kubeCfg.NetworkPluginName != "kubenet",
 			kubeCfg.SeccompProfileRoot,
+			containerHooks,
 			kubeDeps.ContainerRuntimeOptions...,
 		)
 	case "rkt":
