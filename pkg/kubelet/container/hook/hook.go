@@ -141,9 +141,7 @@ func (h scriptContainerEventHook) PreCreate(pod *api.Pod, container *api.Contain
 		return
 	}
 
-	// Modify referenced pod, container and config.
-	*pod = *ctx.Pod
-	*container = *ctx.Container
+	// Modify referenced config.
 	*config = *ctx.Config
 }
 
