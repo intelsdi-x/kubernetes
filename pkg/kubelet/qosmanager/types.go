@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package eviction
+package qosmanager
 
 import (
 	"time"
@@ -23,6 +23,37 @@ import (
 	"k8s.io/kubernetes/pkg/api/resource"
 	statsapi "k8s.io/kubernetes/pkg/kubelet/api/v1alpha1/stats"
 )
+
+// DiskInfoProvider is responsible for informing the manager how disk is configured.
+type DiskInfoProvider interface {
+	// HasDedicatedImageFs returns true if the imagefs is on a separate device from the rootfs.
+	HasDedicatedImageFs() (bool, error)
+}
+
+// ImageGC is responsible for performing garbage collection of unused images.
+type ImageGC interface {
+	// DeleteUnusedImages deletes unused images and returns the number of bytes freed, or an error.
+	DeleteUnusedImages() (int64, error)
+}
+
+// KillPodFunc kills a pod.
+// The pod status is updated, and then it is killed with the specified grace period.
+// This function must block until either the pod is killed or an error is encountered.
+// Arguments:
+// pod - the pod to kill
+// status - the desired status to associate with the pod (i.e. why its killed)
+// gracePeriodOverride - the grace period override to use instead of what is on the pod spec
+type KillPodFunc func(pod *api.Pod, status api.PodStatus, gracePeriodOverride *int64) error
+
+// ActivePodsFunc returns pods bound to the kubelet that are active (i.e. non-terminal state)
+type ActivePodsFunc func() []*api.Pod
+
+// statsFunc returns the usage stats if known for an input pod.
+type statsFunc func(pod *api.Pod) (statsapi.PodStats, bool)
+
+///////////////////////////////////////////////////////////////////////////////
+// The following should move to the disk and mem controller.
+///////////////////////////////////////////////////////////////////////////////
 
 // Signal defines a signal that can trigger eviction of pods on a node.
 type Signal string
@@ -93,45 +124,6 @@ type Threshold struct {
 	// MinReclaim represents the minimum amount of resource to reclaim if the threshold is met.
 	MinReclaim *resource.Quantity
 }
-
-// Manager evaluates when an eviction threshold for node stability has been met on the node.
-type Manager interface {
-	// Start starts the control loop to monitor eviction thresholds at specified interval.
-	Start(diskInfoProvider DiskInfoProvider, podFunc ActivePodsFunc, monitoringInterval time.Duration) error
-
-	// IsUnderMemoryPressure returns true if the node is under memory pressure.
-	IsUnderMemoryPressure() bool
-
-	// IsUnderDiskPressure returns true if the node is under disk pressure.
-	IsUnderDiskPressure() bool
-}
-
-// DiskInfoProvider is responsible for informing the manager how disk is configured.
-type DiskInfoProvider interface {
-	// HasDedicatedImageFs returns true if the imagefs is on a separate device from the rootfs.
-	HasDedicatedImageFs() (bool, error)
-}
-
-// ImageGC is responsible for performing garbage collection of unused images.
-type ImageGC interface {
-	// DeleteUnusedImages deletes unused images and returns the number of bytes freed, or an error.
-	DeleteUnusedImages() (int64, error)
-}
-
-// KillPodFunc kills a pod.
-// The pod status is updated, and then it is killed with the specified grace period.
-// This function must block until either the pod is killed or an error is encountered.
-// Arguments:
-// pod - the pod to kill
-// status - the desired status to associate with the pod (i.e. why its killed)
-// gracePeriodOverride - the grace period override to use instead of what is on the pod spec
-type KillPodFunc func(pod *api.Pod, status api.PodStatus, gracePeriodOverride *int64) error
-
-// ActivePodsFunc returns pods bound to the kubelet that are active (i.e. non-terminal state)
-type ActivePodsFunc func() []*api.Pod
-
-// statsFunc returns the usage stats if known for an input pod.
-type statsFunc func(pod *api.Pod) (statsapi.PodStats, bool)
 
 // rankFunc sorts the pods in eviction order
 type rankFunc func(pods []*api.Pod, stats statsFunc)

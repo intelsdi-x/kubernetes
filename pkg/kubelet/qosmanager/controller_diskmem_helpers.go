@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package eviction
+package qosmanager
 
 import (
 	"fmt"
@@ -53,15 +53,6 @@ const (
 	resourceNodeFsInodes api.ResourceName = "nodefsInodes"
 )
 
-var (
-	// signalToNodeCondition maps a signal to the node condition to report if threshold is met.
-	signalToNodeCondition map[Signal]api.NodeConditionType
-	// signalToResource maps a Signal to its associated Resource.
-	signalToResource map[Signal]api.ResourceName
-	// resourceToSignal maps a Resource to its associated Signal
-	resourceToSignal map[api.ResourceName]Signal
-)
-
 func init() {
 	// map eviction signals to node conditions
 	signalToNodeCondition = map[Signal]api.NodeConditionType{}
@@ -83,6 +74,15 @@ func init() {
 		resourceToSignal[value] = key
 	}
 }
+
+var (
+	// signalToNodeCondition maps a signal to the node condition to report if threshold is met.
+	signalToNodeCondition map[Signal]api.NodeConditionType
+	// signalToResource maps a Signal to its associated Resource.
+	signalToResource map[Signal]api.ResourceName
+	// resourceToSignal maps a Resource to its associated Signal
+	resourceToSignal map[api.ResourceName]Signal
+)
 
 // validSignal returns true if the signal is supported.
 func validSignal(signal Signal) bool {
@@ -699,48 +699,6 @@ func thresholdsMetGracePeriod(observedAt thresholdsObservedAt, now time.Time) []
 	return results
 }
 
-// nodeConditions returns the set of node conditions associated with a threshold
-func nodeConditions(thresholds []Threshold) []api.NodeConditionType {
-	results := []api.NodeConditionType{}
-	for _, threshold := range thresholds {
-		if nodeCondition, found := signalToNodeCondition[threshold.Signal]; found {
-			if !hasNodeCondition(results, nodeCondition) {
-				results = append(results, nodeCondition)
-			}
-		}
-	}
-	return results
-}
-
-// nodeConditionsLastObservedAt merges the input with the previous observation to determine when a condition was most recently met.
-func nodeConditionsLastObservedAt(nodeConditions []api.NodeConditionType, lastObservedAt nodeConditionsObservedAt, now time.Time) nodeConditionsObservedAt {
-	results := nodeConditionsObservedAt{}
-	// the input conditions were observed "now"
-	for i := range nodeConditions {
-		results[nodeConditions[i]] = now
-	}
-	// the conditions that were not observed now are merged in with their old time
-	for key, value := range lastObservedAt {
-		_, found := results[key]
-		if !found {
-			results[key] = value
-		}
-	}
-	return results
-}
-
-// nodeConditionsObservedSince returns the set of conditions that have been observed within the specified period
-func nodeConditionsObservedSince(observedAt nodeConditionsObservedAt, period time.Duration, now time.Time) []api.NodeConditionType {
-	results := []api.NodeConditionType{}
-	for nodeCondition, at := range observedAt {
-		duration := now.Sub(at)
-		if duration < period {
-			results = append(results, nodeCondition)
-		}
-	}
-	return results
-}
-
 // hasFsStatsType returns true if the fsStat is in the input list
 func hasFsStatsType(inputs []fsStatsType, item fsStatsType) bool {
 	for _, input := range inputs {
@@ -751,14 +709,20 @@ func hasFsStatsType(inputs []fsStatsType, item fsStatsType) bool {
 	return false
 }
 
-// hasNodeCondition returns true if the node condition is in the input list
-func hasNodeCondition(inputs []api.NodeConditionType, item api.NodeConditionType) bool {
-	for _, input := range inputs {
-		if input == item {
-			return true
+// nodeConditions returns a map of node condition types to a list of thresholds
+// that caused them.
+func nodeConditions(thresholds []Threshold, now time.Time) map[api.NodeConditionType]detected {
+	conds := map[api.NodeCondition]detected{}
+	for _, threshold := range thresholds {
+		if nodeCondition, found := signalToNodeCondition[threshold.Signal]; found {
+			if _, found := conds[nodeCondition]; !found || conds[nodeCondition] == nil {
+				conds[nodeCondition] = detected{[]Threshold{}, now, now}
+			}
+			conds[nodeCondition].thresholds = append(conds[nodeCondition].thresholds, threshold)
+			conds[nodeCondition].lastObserved = now
 		}
 	}
-	return false
+	return conds
 }
 
 // mergeThresholds will merge both threshold lists eliminating duplicates.

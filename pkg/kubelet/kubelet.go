@@ -55,7 +55,6 @@ import (
 	"k8s.io/kubernetes/pkg/kubelet/dockertools"
 	"k8s.io/kubernetes/pkg/kubelet/envvars"
 	"k8s.io/kubernetes/pkg/kubelet/events"
-	"k8s.io/kubernetes/pkg/kubelet/eviction"
 	"k8s.io/kubernetes/pkg/kubelet/images"
 	"k8s.io/kubernetes/pkg/kubelet/kuberuntime"
 	"k8s.io/kubernetes/pkg/kubelet/lifecycle"
@@ -65,6 +64,7 @@ import (
 	kubepod "k8s.io/kubernetes/pkg/kubelet/pod"
 	"k8s.io/kubernetes/pkg/kubelet/prober"
 	proberesults "k8s.io/kubernetes/pkg/kubelet/prober/results"
+	"k8s.io/kubernetes/pkg/kubelet/qosmanager"
 	"k8s.io/kubernetes/pkg/kubelet/remote"
 	"k8s.io/kubernetes/pkg/kubelet/rkt"
 	"k8s.io/kubernetes/pkg/kubelet/server"
@@ -127,9 +127,9 @@ const (
 	// Period for performing global cleanup tasks.
 	housekeepingPeriod = time.Second * 2
 
-	// Period for performing eviction monitoring.
+	// Period for performing qos monitoring.
 	// TODO ensure this is in sync with internal cadvisor housekeeping.
-	evictionMonitoringPeriod = time.Second * 10
+	qosMonitoringPeriod = time.Second * 10
 
 	// The path in containers' filesystems where the hosts file is mounted.
 	etcHostsPath = "/etc/hosts"
@@ -345,11 +345,11 @@ func NewMainKubelet(kubeCfg *componentconfig.KubeletConfiguration, kubeDeps *Kub
 		RootFreeDiskMB:   int(kubeCfg.LowDiskSpaceThresholdMB),
 	}
 
-	thresholds, err := eviction.ParseThresholdConfig(kubeCfg.EvictionHard, kubeCfg.EvictionSoft, kubeCfg.EvictionSoftGracePeriod, kubeCfg.EvictionMinimumReclaim)
+	thresholds, err := qosmanager.ParseThresholdConfig(kubeCfg.EvictionHard, kubeCfg.EvictionSoft, kubeCfg.EvictionSoftGracePeriod, kubeCfg.EvictionMinimumReclaim)
 	if err != nil {
 		return nil, err
 	}
-	evictionConfig := eviction.Config{
+	qosConfig := qosmanager.Config{
 		PressureTransitionPeriod: kubeCfg.EvictionPressureTransitionPeriod.Duration,
 		MaxPodGracePeriodSeconds: int64(kubeCfg.EvictionMaxPodGracePeriod),
 		Thresholds:               thresholds,
@@ -725,14 +725,14 @@ func NewMainKubelet(kubeCfg *componentconfig.KubeletConfiguration, kubeDeps *Kub
 	klet.podKillingCh = make(chan *kubecontainer.PodPair, podKillingChannelCapacity)
 	klet.setNodeStatusFuncs = klet.defaultNodeStatusFuncs()
 
-	// setup eviction manager
-	evictionManager, evictionAdmitHandler, err := eviction.NewManager(klet.resourceAnalyzer, evictionConfig, killPodNow(klet.podWorkers, kubeDeps.Recorder), klet.imageManager, kubeDeps.Recorder, nodeRef, klet.clock)
+	// setup qos manager
+	qosManager, qosAdmitHandler, err := qosmanager.NewManager(klet.resourceAnalyzer, qosConfig, killPodNow(klet.podWorkers, kubeDeps.Recorder), klet.imageManager, kubeDeps.Recorder, nodeRef, klet.clock)
 
 	if err != nil {
-		return nil, fmt.Errorf("failed to initialize eviction manager: %v", err)
+		return nil, fmt.Errorf("failed to initialize qos manager: %v", err)
 	}
-	klet.evictionManager = evictionManager
-	klet.AddPodAdmitHandler(evictionAdmitHandler)
+	klet.qosManager = qosManager
+	klet.AddPodAdmitHandler(qosAdmitHandler)
 
 	// add sysctl admission
 	runtimeSupport, err := sysctl.NewRuntimeAdmitHandler(klet.containerRuntime)
@@ -811,7 +811,7 @@ type Kubelet struct {
 	podManager kubepod.Manager
 
 	// Needed to observe and respond to situations that could impact node stability
-	evictionManager eviction.Manager
+	qosManager qosmanager.Manager
 
 	// Needed to report events for containers belonging to deleted/modified pods.
 	// Tracks references for reporting events
@@ -1173,9 +1173,9 @@ func (kl *Kubelet) initializeRuntimeDependentModules() {
 		// TODO(random-liu): Add backoff logic in the babysitter
 		glog.Fatalf("Failed to start cAdvisor %v", err)
 	}
-	// eviction manager must start after cadvisor because it needs to know if the container runtime has a dedicated imagefs
-	if err := kl.evictionManager.Start(kl, kl.getActivePods, evictionMonitoringPeriod); err != nil {
-		kl.runtimeState.setInternalError(fmt.Errorf("failed to start eviction manager %v", err))
+	// qos manager must start after cadvisor because it needs to know if the container runtime has a dedicated imagefs
+	if err := kl.qosManager.Start(kl, kl.getActivePods, qosMonitoringPeriod); err != nil {
+		kl.runtimeState.setInternalError(fmt.Errorf("failed to start qos manager %v", err))
 	}
 }
 
@@ -2485,7 +2485,7 @@ func (kl *Kubelet) HandlePodReconcile(pods []*api.Pod) {
 		kl.podManager.UpdatePod(pod)
 
 		// After an evicted pod is synced, all dead containers in the pod can be removed.
-		if eviction.PodIsEvicted(pod.Status) {
+		if qosmanager.PodIsEvicted(pod.Status) {
 			if podStatus, err := kl.podCache.Get(pod.UID); err == nil {
 				kl.containerDeletor.deleteContainersInPod("", podStatus, true)
 			}
@@ -3078,7 +3078,7 @@ func (kl *Kubelet) cleanUpContainersInPod(podId types.UID, exitedContainerID str
 		removeAll := false
 		if syncedPod, ok := kl.podManager.GetPodByUID(podId); ok {
 			// When an evicted pod has already synced, all containers can be removed.
-			removeAll = eviction.PodIsEvicted(syncedPod.Status)
+			removeAll = qosmanager.PodIsEvicted(syncedPod.Status)
 		}
 		kl.containerDeletor.deleteContainersInPod(exitedContainerID, podStatus, removeAll)
 	}

@@ -26,7 +26,7 @@ import (
 	"k8s.io/kubernetes/pkg/client/record"
 	kubecontainer "k8s.io/kubernetes/pkg/kubelet/container"
 	"k8s.io/kubernetes/pkg/kubelet/events"
-	"k8s.io/kubernetes/pkg/kubelet/eviction"
+	"k8s.io/kubernetes/pkg/kubelet/qosmanager"
 	kubetypes "k8s.io/kubernetes/pkg/kubelet/types"
 	"k8s.io/kubernetes/pkg/kubelet/util/queue"
 	"k8s.io/kubernetes/pkg/types"
@@ -282,7 +282,7 @@ func (p *podWorkers) checkForUpdates(uid types.UID) {
 
 // killPodNow returns a KillPodFunc that can be used to kill a pod.
 // It is intended to be injected into other modules that need to kill a pod.
-func killPodNow(podWorkers PodWorkers, recorder record.EventRecorder) eviction.KillPodFunc {
+func killPodNow(podWorkers PodWorkers, recorder record.EventRecorder) qosmanager.KillPodFunc {
 	return func(pod *api.Pod, status api.PodStatus, gracePeriodOverride *int64) error {
 		// determine the grace period to use when killing the pod
 		gracePeriod := int64(0)
