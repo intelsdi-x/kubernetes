@@ -14,6 +14,6 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package eviction is responsible for enforcing eviction thresholds to maintain
+// Package qosmanager is responsible for enforcing eviction thresholds to maintain
 // node stability.
-package eviction // import "k8s.io/kubernetes/pkg/kubelet/eviction"
+package qosmanager // import "k8s.io/kubernetes/pkg/kubelet/qosmanager"

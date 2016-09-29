@@ -605,120 +605,55 @@ func (kl *Kubelet) setNodeReadyCondition(node *api.Node) {
 	}
 }
 
-// setNodeMemoryPressureCondition for the node.
-// TODO: this needs to move somewhere centralized...
-func (kl *Kubelet) setNodeMemoryPressureCondition(node *api.Node) {
-	currentTime := unversioned.NewTime(kl.clock.Now())
-	var condition *api.NodeCondition
+// setNodeConditions for the node.
+func (kl *Kubelet) setNodeConditionsFromEvictionManager(node *api.Node) {
+	currentTime = unversioned.NewTime(kl.clock.Now())
+	// For each current condition from the Kubelet's eviction manager:
+	for _, current := range kl.evictionManager.GetNodeConditions() {
+		isNew := addUnknownCondition(current.Type)
+		cond := nodeCondition(node, current.Type)
+		isTransition := cond.Status != current.Status
+		// Set heartbeat to now.
+		cond.LastHeartbeatTime = currentTime
+		if isNew || isTransition {
+			// Record now as last transition time.
+			cond.LastTransitionTime = currentTime
+			// Set the new status, reason and message.
+			cond.Status = current.Status
+			cond.Reason = current.Reason
+			cond.Message = current.Message
 
-	// Check if NodeMemoryPressure condition already exists and if it does, just pick it up for update.
-	for i := range node.Status.Conditions {
-		if node.Status.Conditions[i].Type == api.NodeMemoryPressure {
-			condition = &node.Status.Conditions[i]
+			// Emit a node status event.
+			kl.recordNodeStatusEvent(api.EventTypeNormal, cond.Reason)
 		}
-	}
-
-	newCondition := false
-	// If the NodeMemoryPressure condition doesn't exist, create one
-	if condition == nil {
-		condition = &api.NodeCondition{
-			Type:   api.NodeMemoryPressure,
-			Status: api.ConditionUnknown,
-		}
-		// cannot be appended to node.Status.Conditions here because it gets
-		// copied to the slice. So if we append to the slice here none of the
-		// updates we make below are reflected in the slice.
-		newCondition = true
-	}
-
-	// Update the heartbeat time
-	condition.LastHeartbeatTime = currentTime
-
-	// Note: The conditions below take care of the case when a new NodeMemoryPressure condition is
-	// created and as well as the case when the condition already exists. When a new condition
-	// is created its status is set to api.ConditionUnknown which matches either
-	// condition.Status != api.ConditionTrue or
-	// condition.Status != api.ConditionFalse in the conditions below depending on whether
-	// the kubelet is under memory pressure or not.
-	if kl.evictionManager.IsUnderMemoryPressure() {
-		if condition.Status != api.ConditionTrue {
-			condition.Status = api.ConditionTrue
-			condition.Reason = "KubeletHasInsufficientMemory"
-			condition.Message = "kubelet has insufficient memory available"
-			condition.LastTransitionTime = currentTime
-			kl.recordNodeStatusEvent(api.EventTypeNormal, "NodeHasInsufficientMemory")
-		}
-	} else {
-		if condition.Status != api.ConditionFalse {
-			condition.Status = api.ConditionFalse
-			condition.Reason = "KubeletHasSufficientMemory"
-			condition.Message = "kubelet has sufficient memory available"
-			condition.LastTransitionTime = currentTime
-			kl.recordNodeStatusEvent(api.EventTypeNormal, "NodeHasSufficientMemory")
-		}
-	}
-
-	if newCondition {
-		node.Status.Conditions = append(node.Status.Conditions, *condition)
 	}
 }
 
-// setNodeDiskPressureCondition for the node.
-// TODO: this needs to move somewhere centralized...
-func (kl *Kubelet) setNodeDiskPressureCondition(node *api.Node) {
-	currentTime := unversioned.NewTime(kl.clock.Now())
-	var condition *api.NodeCondition
+func (kl *Kubelet) setDefaultNodeConditions(node *api.Node) {
+	// Add default "unknown" conditions, only if not present.
+	addUnknownCondition(node, api.NodeMemoryPressure)
+	addUnknownCondition(node, api.NodeDiskPressure)
+	addUnknownCondition(node, api.NodeOutOfDisk)
+}
 
-	// Check if NodeDiskPressure condition already exists and if it does, just pick it up for update.
-	for i := range node.Status.Conditions {
-		if node.Status.Conditions[i].Type == api.NodeDiskPressure {
-			condition = &node.Status.Conditions[i]
+func nodeCondition(node *api.Node, cType api.NodeConditionType) *api.NodeCondition {
+	for _, c := range node.Status.Conditions {
+		if c.Type == cType {
+			return c
 		}
 	}
+	return nil
+}
 
-	newCondition := false
-	// If the NodeDiskPressure condition doesn't exist, create one
-	if condition == nil {
-		condition = &api.NodeCondition{
-			Type:   api.NodeDiskPressure,
+func addUnknownCondition(node *api.Node, cType api.NodeConditionType) bool {
+	if nodeCondition(node, cType) == nil {
+		node.Status.Conditions = append(node.Status.Conditions, &api.NodeCondition{
+			Type:   cType,
 			Status: api.ConditionUnknown,
-		}
-		// cannot be appended to node.Status.Conditions here because it gets
-		// copied to the slice. So if we append to the slice here none of the
-		// updates we make below are reflected in the slice.
-		newCondition = true
+		})
+		return true
 	}
-
-	// Update the heartbeat time
-	condition.LastHeartbeatTime = currentTime
-
-	// Note: The conditions below take care of the case when a new NodeDiskressure condition is
-	// created and as well as the case when the condition already exists. When a new condition
-	// is created its status is set to api.ConditionUnknown which matches either
-	// condition.Status != api.ConditionTrue or
-	// condition.Status != api.ConditionFalse in the conditions below depending on whether
-	// the kubelet is under disk pressure or not.
-	if kl.evictionManager.IsUnderDiskPressure() {
-		if condition.Status != api.ConditionTrue {
-			condition.Status = api.ConditionTrue
-			condition.Reason = "KubeletHasDiskPressure"
-			condition.Message = "kubelet has disk pressure"
-			condition.LastTransitionTime = currentTime
-			kl.recordNodeStatusEvent(api.EventTypeNormal, "NodeHasDiskPressure")
-		}
-	} else {
-		if condition.Status != api.ConditionFalse {
-			condition.Status = api.ConditionFalse
-			condition.Reason = "KubeletHasNoDiskPressure"
-			condition.Message = "kubelet has no disk pressure"
-			condition.LastTransitionTime = currentTime
-			kl.recordNodeStatusEvent(api.EventTypeNormal, "NodeHasNoDiskPressure")
-		}
-	}
-
-	if newCondition {
-		node.Status.Conditions = append(node.Status.Conditions, *condition)
-	}
+	return false
 }
 
 // Set OODcondition for the node.
@@ -833,8 +768,8 @@ func (kl *Kubelet) defaultNodeStatusFuncs() []func(*api.Node) error {
 		kl.setNodeAddress,
 		withoutError(kl.setNodeStatusInfo),
 		withoutError(kl.setNodeOODCondition),
-		withoutError(kl.setNodeMemoryPressureCondition),
-		withoutError(kl.setNodeDiskPressureCondition),
+		withoutError(kl.setNodeConditionsFromEvictionManager),
+		withoutError(kl.setDefaultNodeConditions),
 		withoutError(kl.setNodeReadyCondition),
 		withoutError(kl.setNodeVolumesInUseStatus),
 		withoutError(kl.recordNodeSchedulableEvent),
