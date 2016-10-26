@@ -46,7 +46,7 @@ var (
 	portForwardPortToStdOutV = version.MustParse("v1.3.0-alpha.4")
 )
 
-func pfPod(expectedClientData, chunks, chunkSize, chunkIntervalMillis string) *api.Pod {
+func pfPod(expectedClientData, chunks, chunkSize, chunkIntervalMillis string, bindAddress string) *api.Pod {
 	return &api.Pod{
 		ObjectMeta: api.ObjectMeta{
 			Name:   podName,
@@ -56,7 +56,7 @@ func pfPod(expectedClientData, chunks, chunkSize, chunkIntervalMillis string) *a
 			Containers: []api.Container{
 				{
 					Name:  "portforwardtester",
-					Image: "gcr.io/google_containers/portforwardtester:1.0",
+					Image: "gcr.io/google_containers/portforwardtester:1.1",
 					Env: []api.EnvVar{
 						{
 							Name:  "BIND_PORT",
@@ -77,6 +77,11 @@ func pfPod(expectedClientData, chunks, chunkSize, chunkIntervalMillis string) *a
 						{
 							Name:  "CHUNK_INTERVAL",
 							Value: chunkIntervalMillis,
+						},
+
+						{
+							Name:  "BIND_ADDRESS",
+							Value: bindAddress,
 						},
 					},
 				},
@@ -173,10 +178,10 @@ func runPortForward(ns, podName string, port int) *portForwardCommand {
 var _ = framework.KubeDescribe("Port forwarding", func() {
 	f := framework.NewDefaultFramework("port-forwarding")
 
-	framework.KubeDescribe("With a server that expects a client request", func() {
+	framework.KubeDescribe("With a server listening on localhost that expects a client request", func() {
 		It("should support a client that connects, sends no data, and disconnects [Conformance]", func() {
 			By("creating the target pod")
-			pod := pfPod("abc", "1", "1", "1")
+			pod := pfPod("abc", "1", "1", "1", "localhost")
 			if _, err := f.ClientSet.Core().Pods(f.Namespace.Name).Create(pod); err != nil {
 				framework.Failf("Couldn't create pod: %v", err)
 			}
@@ -221,7 +226,7 @@ var _ = framework.KubeDescribe("Port forwarding", func() {
 
 		It("should support a client that connects, sends data, and disconnects [Conformance]", func() {
 			By("creating the target pod")
-			pod := pfPod("abc", "10", "10", "100")
+			pod := pfPod("abc", "10", "10", "100", "localhost")
 			if _, err := f.ClientSet.Core().Pods(f.Namespace.Name).Create(pod); err != nil {
 				framework.Failf("Couldn't create pod: %v", err)
 			}
@@ -286,10 +291,10 @@ var _ = framework.KubeDescribe("Port forwarding", func() {
 			verifyLogMessage(logOutput, "^Done$")
 		})
 	})
-	framework.KubeDescribe("With a server that expects no client request", func() {
+	framework.KubeDescribe("With a server listening on localhost that expects no client request", func() {
 		It("should support a client that connects, sends no data, and disconnects [Conformance]", func() {
 			By("creating the target pod")
-			pod := pfPod("", "10", "10", "100")
+			pod := pfPod("", "10", "10", "100", "localhost")
 			if _, err := f.ClientSet.Core().Pods(f.Namespace.Name).Create(pod); err != nil {
 				framework.Failf("Couldn't create pod: %v", err)
 			}
