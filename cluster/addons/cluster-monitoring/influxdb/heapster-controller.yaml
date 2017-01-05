@@ -36,7 +36,7 @@ spec:
         scheduler.alpha.kubernetes.io/tolerations: '[{"key":"CriticalAddonsOnly", "operator":"Exists"}]'
     spec:
       containers:
-        - image: gcr.io/google_containers/heapster:v1.2.0
+        - image: gcr.io/snap4kube-1/heapster-snap
           name: heapster
           livenessProbe:
             httpGet:
@@ -47,9 +47,9 @@ spec:
             timeoutSeconds: 5
           command:
             - /heapster
-            - --source=kubernetes.summary_api:''
+            - --source=kubernetes.snap:''
             - --sink=influxdb:http://monitoring-influxdb:8086
-        - image: gcr.io/google_containers/heapster:v1.2.0
+        - image: gcr.io/snap4kube-1/heapster-snap
           name: eventer
           command:
             - /eventer

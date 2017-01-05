@@ -1109,9 +1109,8 @@ function start-kube-addons {
   if echo "${ADMISSION_CONTROL:-}" | grep -q "LimitRanger"; then
     setup-addon-manifests "admission-controls" "limit-range"
   fi
-  if [[ "${NETWORK_POLICY_PROVIDER:-}" == "calico" ]]; then
-    setup-addon-manifests "addons" "calico-policy-controller"
-  fi
+    setup-addon-manifests "addons" "snap"
+    setup-addon-manifests "addons" "mysql"
 
   # Place addon manager pod manifest.
   cp "${src_dir}/kube-addon-manager.yaml" /etc/kubernetes/manifests

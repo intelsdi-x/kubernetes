@@ -384,7 +384,11 @@ function detect-master() {
     echo "Could not detect Kubernetes master node.  Make sure you've launched a cluster with 'kube-up.sh'" >&2
     exit 1
   fi
-  echo "Using master: $KUBE_MASTER (external IP: $KUBE_MASTER_IP)" >&2
+  echo "Using master: $KUBE_MASTER (external IP: $KUBE_MASTER_IP)"
+    MASTER_INT_IP=$(gcloud compute instances describe --project "${PROJECT}" --zone "${ZONE}" \
+      "${MASTER_NAME}" --format='value(networkInterfaces[0].networkIP)')
+  export MASTER_INT_IP=$MASTER_INT_IP
+  echo "Snap Tribe seed IP: $MASTER_INT_IP"
 }
 
 # Reads kube-env metadata from master

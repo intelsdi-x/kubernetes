@@ -115,6 +115,7 @@ while true; do
     fi
   fi
 done
+echo ${found} > /tmp/tribe.nodes
 echo "Found ${found} node(s)."
 kubectl_retry get nodes
 
