@@ -82,6 +82,7 @@ func (m *podContainerManagerImpl) EnsureExists(pod *api.Pod) error {
 		if err := m.cgroupManager.Create(containerConfig); err != nil {
 			return fmt.Errorf("failed to create container for %v : %v", podContainerName, err)
 		}
+		// TODO(CD): Invoke pod pre-start lifecycle hook if exists
 	}
 	// Apply appropriate resource limits on the pod container
 	// Top level qos containers limits are not updated
@@ -166,6 +167,7 @@ func (m *podContainerManagerImpl) Destroy(podCgroup CgroupName) error {
 		Name:               podCgroup,
 		ResourceParameters: &ResourceConfig{},
 	}
+	// TODO(CD): Invoke pod post-stop lifecycle hook.
 	if err := m.cgroupManager.Destroy(containerConfig); err != nil {
 		return fmt.Errorf("failed to delete cgroup paths for %v : %v", podCgroup, err)
 	}
