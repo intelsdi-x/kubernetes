@@ -62,7 +62,7 @@ func newEventDispatcher() *eventDispatcher {
 
 func (ed *eventDispatcher) dispatchEvent(cgroupPath, eventName string) error {
 	// construct an event
-	ev := lifecycle.Event{
+	ev := &lifecycle.Event{
 		Name: eventName,
 		CgroupInfo: &lifecycle.CgroupInfo{
 			Kind: lifecycle.CgroupInfo_POD,
@@ -74,7 +74,10 @@ func (ed *eventDispatcher) dispatchEvent(cgroupPath, eventName string) error {
 		// TODO(CD): Improve this by building a cancelable context
 		ctx := context.Background()
 		glog.Infof("Dispatching to event handler: %s", handler.name)
-		reply := handler.client.Notify(ctx, ev)
+		reply, err := handler.client.Notify(ctx, ev)
+		if err != nil {
+			return err
+		}
 		if reply.Error != "" {
 			return errors.New(reply.Error)
 		}
