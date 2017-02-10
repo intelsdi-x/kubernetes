@@ -18,8 +18,11 @@ package cm
 
 import (
 	"errors"
+	"net"
+
 	"github.com/golang/glog"
 	"golang.org/x/net/context"
+	"google.golang.org/grpc"
 	"k8s.io/pkg/kubelet/api/v1alpha1/lifecycle"
 )
 
@@ -57,15 +60,13 @@ func newEventDispatcher() *eventDispatcher {
 	}
 }
 
-func (ed *eventDispatcher) PreStartPod(cgroupPath string) {
-	// Notify(ctx context.Context, in *Event, opts ...grpc.CallOption) (*EventReply, error)
-
+func (ed *eventDispatcher) dispatchEvent(cgroupPath, eventName string) error {
 	// construct an event
 	ev := lifecycle.Event{
-		Name: "PRE_START",
+		Name: eventName,
 		CgroupInfo: &lifecycle.CgroupInfo{
 			Kind: lifecycle.CgroupInfo_POD,
-			Path: path,
+			Path: cgroupPath,
 		},
 	}
 
@@ -82,12 +83,33 @@ func (ed *eventDispatcher) PreStartPod(cgroupPath string) {
 	return nil
 }
 
-func (ed *eventDispatcher) PostStopPod(cgroupPath string) {
-	// TODO
+func (ed *eventDispatcher) PreStartPod(cgroupPath string) {
+	return ed.dispatchEvent(cgroupPath, "PRE_START")
 }
 
-func (ed *eventDispatcher) Start() {
-	// TODO
+func (ed *eventDispatcher) PostStopPod(cgroupPath string) {
+	return ed.dispatchEvent(cgroupPath, "POST_STOP")
+}
+
+func (ed *eventDispatcher) Start(socketAddress string) {
+	// Set up server bind address.
+	lis, err := net.Listen("tcp", socketAddress)
+	if err != nil {
+		log.Fatalf("failed to bind to socket address: %v", err)
+	}
+
+	// Create a grpc.Server.
+	s = grpc.NewServer()
+
+	// Register self as KubeletEventDispatcherServer.
+	lifecycle.RegisterKubeletEventDispatcherServer(s, ed)
+
+	// Start listen in a separate goroutine.
+	go func() {
+		if err := s.Serve(lis); err != nil {
+			log.Fatalf("failed to start event dispatcher server: %v", err)
+		}
+	}()
 }
 
 func (ed *eventDispatcher) Register(context.Context, *RegisterRequest) (*RegisterReply, error) {
