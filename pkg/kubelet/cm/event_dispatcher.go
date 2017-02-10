@@ -70,7 +70,7 @@ func (ed *eventDispatcher) dispatchEvent(cgroupPath, eventName string) error {
 		},
 	}
 
-	for handler := range ed.handlers {
+	for _, handler := range ed.handlers {
 		// TODO(CD): Improve this by building a cancelable context
 		ctx := context.Background()
 		glog.Infof("Dispatching to event handler: %s", handler.name)
@@ -83,11 +83,11 @@ func (ed *eventDispatcher) dispatchEvent(cgroupPath, eventName string) error {
 	return nil
 }
 
-func (ed *eventDispatcher) PreStartPod(cgroupPath string) {
+func (ed *eventDispatcher) PreStartPod(cgroupPath string) error {
 	return ed.dispatchEvent(cgroupPath, "PRE_START")
 }
 
-func (ed *eventDispatcher) PostStopPod(cgroupPath string) {
+func (ed *eventDispatcher) PostStopPod(cgroupPath string) error {
 	return ed.dispatchEvent(cgroupPath, "POST_STOP")
 }
 
@@ -99,7 +99,7 @@ func (ed *eventDispatcher) Start(socketAddress string) {
 	}
 
 	// Create a grpc.Server.
-	s = grpc.NewServer()
+	s := grpc.NewServer()
 
 	// Register self as KubeletEventDispatcherServer.
 	lifecycle.RegisterKubeletEventDispatcherServer(s, ed)
@@ -112,11 +112,12 @@ func (ed *eventDispatcher) Start(socketAddress string) {
 	}()
 }
 
-func (ed *eventDispatcher) Register(context.Context, *RegisterRequest) (*RegisterReply, error) {
+func (ed *eventDispatcher) Register(context.Context, *lifecycle.RegisterRequest) (*lifecycle.RegisterReply, error) {
 	// TODO
 
 	// Create a registeredHandler instance
 	// Check registered name for uniqueness
 	// Add registeredHandler to the slice of handlers
 	// Construct and return a reply
+	return &lifecycle.RegisterReply{}, nil
 }
