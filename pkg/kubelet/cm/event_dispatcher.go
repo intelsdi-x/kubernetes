@@ -95,7 +95,7 @@ func (ed *eventDispatcher) Start(socketAddress string) {
 	// Set up server bind address.
 	lis, err := net.Listen("tcp", socketAddress)
 	if err != nil {
-		log.Fatalf("failed to bind to socket address: %v", err)
+		glog.Fatalf("failed to bind to socket address: %v", err)
 	}
 
 	// Create a grpc.Server.
@@ -107,7 +107,7 @@ func (ed *eventDispatcher) Start(socketAddress string) {
 	// Start listen in a separate goroutine.
 	go func() {
 		if err := s.Serve(lis); err != nil {
-			log.Fatalf("failed to start event dispatcher server: %v", err)
+			glog.Fatalf("failed to start event dispatcher server: %v", err)
 		}
 	}()
 }
