@@ -23,7 +23,7 @@ import (
 	"github.com/golang/glog"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
-	"k8s.io/pkg/kubelet/api/v1alpha1/lifecycle"
+	"k8s.io/kubernetes/pkg/kubelet/api/v1alpha1/lifecycle"
 )
 
 // EventDispatcher manages a set of registered lifecycle event handlers and
