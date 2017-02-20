@@ -27,6 +27,8 @@ limitations under the License.
 	It has these top-level messages:
 		RegisterRequest
 		RegisterReply
+		UnregisterRequest
+		UnregisterReply
 		Event
 		EventReply
 		CgroupInfo
@@ -57,6 +59,27 @@ var _ = math.Inf
 // is compatible with the proto package it is being compiled against.
 const _ = proto.GoGoProtoPackageIsVersion1
 
+type Event_Kind int32
+
+const (
+	Event_POD_PRE_START Event_Kind = 0
+	Event_POD_POST_STOP Event_Kind = 1
+)
+
+var Event_Kind_name = map[int32]string{
+	0: "POD_PRE_START",
+	1: "POD_POST_STOP",
+}
+var Event_Kind_value = map[string]int32{
+	"POD_PRE_START": 0,
+	"POD_POST_STOP": 1,
+}
+
+func (x Event_Kind) String() string {
+	return proto.EnumName(Event_Kind_name, int32(x))
+}
+func (Event_Kind) EnumDescriptor() ([]byte, []int) { return fileDescriptorApi, []int{4, 0} }
+
 type CgroupInfo_Kind int32
 
 const (
@@ -79,12 +102,13 @@ var CgroupInfo_Kind_value = map[string]int32{
 func (x CgroupInfo_Kind) String() string {
 	return proto.EnumName(CgroupInfo_Kind_name, int32(x))
 }
-func (CgroupInfo_Kind) EnumDescriptor() ([]byte, []int) { return fileDescriptorApi, []int{4, 0} }
+func (CgroupInfo_Kind) EnumDescriptor() ([]byte, []int) { return fileDescriptorApi, []int{6, 0} }
 
 type RegisterRequest struct {
 	// For example: localhost:10321
 	SocketAddress string `protobuf:"bytes,1,opt,name=socketAddress,proto3" json:"socketAddress,omitempty"`
 	Name          string `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	Token         string `protobuf:"bytes,3,opt,name=token,proto3" json:"token,omitempty"`
 }
 
 func (m *RegisterRequest) Reset()                    { *m = RegisterRequest{} }
@@ -93,21 +117,38 @@ func (*RegisterRequest) Descriptor() ([]byte, []int) { return fileDescriptorApi,
 
 type RegisterReply struct {
 	Error string `protobuf:"bytes,1,opt,name=error,proto3" json:"error,omitempty"`
+	Token string `protobuf:"bytes,2,opt,name=token,proto3" json:"token,omitempty"`
 }
 
 func (m *RegisterReply) Reset()                    { *m = RegisterReply{} }
 func (*RegisterReply) ProtoMessage()               {}
 func (*RegisterReply) Descriptor() ([]byte, []int) { return fileDescriptorApi, []int{1} }
 
+type UnregisterRequest struct {
+	Name  string `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Token string `protobuf:"bytes,2,opt,name=token,proto3" json:"token,omitempty"`
+}
+
+func (m *UnregisterRequest) Reset()                    { *m = UnregisterRequest{} }
+func (*UnregisterRequest) ProtoMessage()               {}
+func (*UnregisterRequest) Descriptor() ([]byte, []int) { return fileDescriptorApi, []int{2} }
+
+type UnregisterReply struct {
+	Error string `protobuf:"bytes,1,opt,name=error,proto3" json:"error,omitempty"`
+}
+
+func (m *UnregisterReply) Reset()                    { *m = UnregisterReply{} }
+func (*UnregisterReply) ProtoMessage()               {}
+func (*UnregisterReply) Descriptor() ([]byte, []int) { return fileDescriptorApi, []int{3} }
+
 type Event struct {
-	// TODO(CD): Represent event type as an enum.
-	Name       string      `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Kind       Event_Kind  `protobuf:"varint,1,opt,name=kind,proto3,enum=lifecycle.Event_Kind" json:"kind,omitempty"`
 	CgroupInfo *CgroupInfo `protobuf:"bytes,2,opt,name=cgroup_info,json=cgroupInfo" json:"cgroup_info,omitempty"`
 }
 
 func (m *Event) Reset()                    { *m = Event{} }
 func (*Event) ProtoMessage()               {}
-func (*Event) Descriptor() ([]byte, []int) { return fileDescriptorApi, []int{2} }
+func (*Event) Descriptor() ([]byte, []int) { return fileDescriptorApi, []int{4} }
 
 func (m *Event) GetCgroupInfo() *CgroupInfo {
 	if m != nil {
@@ -123,7 +164,7 @@ type EventReply struct {
 
 func (m *EventReply) Reset()                    { *m = EventReply{} }
 func (*EventReply) ProtoMessage()               {}
-func (*EventReply) Descriptor() ([]byte, []int) { return fileDescriptorApi, []int{3} }
+func (*EventReply) Descriptor() ([]byte, []int) { return fileDescriptorApi, []int{5} }
 
 func (m *EventReply) GetCgroupInfo() *CgroupInfo {
 	if m != nil {
@@ -139,14 +180,17 @@ type CgroupInfo struct {
 
 func (m *CgroupInfo) Reset()                    { *m = CgroupInfo{} }
 func (*CgroupInfo) ProtoMessage()               {}
-func (*CgroupInfo) Descriptor() ([]byte, []int) { return fileDescriptorApi, []int{4} }
+func (*CgroupInfo) Descriptor() ([]byte, []int) { return fileDescriptorApi, []int{6} }
 
 func init() {
 	proto.RegisterType((*RegisterRequest)(nil), "lifecycle.RegisterRequest")
 	proto.RegisterType((*RegisterReply)(nil), "lifecycle.RegisterReply")
+	proto.RegisterType((*UnregisterRequest)(nil), "lifecycle.UnregisterRequest")
+	proto.RegisterType((*UnregisterReply)(nil), "lifecycle.UnregisterReply")
 	proto.RegisterType((*Event)(nil), "lifecycle.Event")
 	proto.RegisterType((*EventReply)(nil), "lifecycle.EventReply")
 	proto.RegisterType((*CgroupInfo)(nil), "lifecycle.CgroupInfo")
+	proto.RegisterEnum("lifecycle.Event_Kind", Event_Kind_name, Event_Kind_value)
 	proto.RegisterEnum("lifecycle.CgroupInfo_Kind", CgroupInfo_Kind_name, CgroupInfo_Kind_value)
 }
 
@@ -158,128 +202,161 @@ var _ grpc.ClientConn
 // is compatible with the grpc package it is being compiled against.
 const _ = grpc.SupportPackageIsVersion3
 
-// Client API for KubeletEventDispatcher service
+// Client API for EventDispatcher service
 
-type KubeletEventDispatcherClient interface {
+type EventDispatcherClient interface {
 	Register(ctx context.Context, in *RegisterRequest, opts ...grpc.CallOption) (*RegisterReply, error)
+	Unregister(ctx context.Context, in *UnregisterRequest, opts ...grpc.CallOption) (*UnregisterReply, error)
 }
 
-type kubeletEventDispatcherClient struct {
+type eventDispatcherClient struct {
 	cc *grpc.ClientConn
 }
 
-func NewKubeletEventDispatcherClient(cc *grpc.ClientConn) KubeletEventDispatcherClient {
-	return &kubeletEventDispatcherClient{cc}
+func NewEventDispatcherClient(cc *grpc.ClientConn) EventDispatcherClient {
+	return &eventDispatcherClient{cc}
 }
 
-func (c *kubeletEventDispatcherClient) Register(ctx context.Context, in *RegisterRequest, opts ...grpc.CallOption) (*RegisterReply, error) {
+func (c *eventDispatcherClient) Register(ctx context.Context, in *RegisterRequest, opts ...grpc.CallOption) (*RegisterReply, error) {
 	out := new(RegisterReply)
-	err := grpc.Invoke(ctx, "/lifecycle.KubeletEventDispatcher/Register", in, out, c.cc, opts...)
+	err := grpc.Invoke(ctx, "/lifecycle.EventDispatcher/Register", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-// Server API for KubeletEventDispatcher service
+func (c *eventDispatcherClient) Unregister(ctx context.Context, in *UnregisterRequest, opts ...grpc.CallOption) (*UnregisterReply, error) {
+	out := new(UnregisterReply)
+	err := grpc.Invoke(ctx, "/lifecycle.EventDispatcher/Unregister", in, out, c.cc, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
 
-type KubeletEventDispatcherServer interface {
+// Server API for EventDispatcher service
+
+type EventDispatcherServer interface {
 	Register(context.Context, *RegisterRequest) (*RegisterReply, error)
+	Unregister(context.Context, *UnregisterRequest) (*UnregisterReply, error)
 }
 
-func RegisterKubeletEventDispatcherServer(s *grpc.Server, srv KubeletEventDispatcherServer) {
-	s.RegisterService(&_KubeletEventDispatcher_serviceDesc, srv)
+func RegisterEventDispatcherServer(s *grpc.Server, srv EventDispatcherServer) {
+	s.RegisterService(&_EventDispatcher_serviceDesc, srv)
 }
 
-func _KubeletEventDispatcher_Register_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _EventDispatcher_Register_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(RegisterRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(KubeletEventDispatcherServer).Register(ctx, in)
+		return srv.(EventDispatcherServer).Register(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/lifecycle.KubeletEventDispatcher/Register",
+		FullMethod: "/lifecycle.EventDispatcher/Register",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(KubeletEventDispatcherServer).Register(ctx, req.(*RegisterRequest))
+		return srv.(EventDispatcherServer).Register(ctx, req.(*RegisterRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-var _KubeletEventDispatcher_serviceDesc = grpc.ServiceDesc{
-	ServiceName: "lifecycle.KubeletEventDispatcher",
-	HandlerType: (*KubeletEventDispatcherServer)(nil),
+func _EventDispatcher_Unregister_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UnregisterRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(EventDispatcherServer).Unregister(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/lifecycle.EventDispatcher/Unregister",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(EventDispatcherServer).Unregister(ctx, req.(*UnregisterRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+var _EventDispatcher_serviceDesc = grpc.ServiceDesc{
+	ServiceName: "lifecycle.EventDispatcher",
+	HandlerType: (*EventDispatcherServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
 			MethodName: "Register",
-			Handler:    _KubeletEventDispatcher_Register_Handler,
+			Handler:    _EventDispatcher_Register_Handler,
+		},
+		{
+			MethodName: "Unregister",
+			Handler:    _EventDispatcher_Unregister_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
 	Metadata: fileDescriptorApi,
 }
 
-// Client API for LifecycleEventHandler service
+// Client API for EventHandler service
 
-type LifecycleEventHandlerClient interface {
+type EventHandlerClient interface {
 	Notify(ctx context.Context, in *Event, opts ...grpc.CallOption) (*EventReply, error)
 }
 
-type lifecycleEventHandlerClient struct {
+type eventHandlerClient struct {
 	cc *grpc.ClientConn
 }
 
-func NewLifecycleEventHandlerClient(cc *grpc.ClientConn) LifecycleEventHandlerClient {
-	return &lifecycleEventHandlerClient{cc}
+func NewEventHandlerClient(cc *grpc.ClientConn) EventHandlerClient {
+	return &eventHandlerClient{cc}
 }
 
-func (c *lifecycleEventHandlerClient) Notify(ctx context.Context, in *Event, opts ...grpc.CallOption) (*EventReply, error) {
+func (c *eventHandlerClient) Notify(ctx context.Context, in *Event, opts ...grpc.CallOption) (*EventReply, error) {
 	out := new(EventReply)
-	err := grpc.Invoke(ctx, "/lifecycle.LifecycleEventHandler/Notify", in, out, c.cc, opts...)
+	err := grpc.Invoke(ctx, "/lifecycle.EventHandler/Notify", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-// Server API for LifecycleEventHandler service
+// Server API for EventHandler service
 
-type LifecycleEventHandlerServer interface {
+type EventHandlerServer interface {
 	Notify(context.Context, *Event) (*EventReply, error)
 }
 
-func RegisterLifecycleEventHandlerServer(s *grpc.Server, srv LifecycleEventHandlerServer) {
-	s.RegisterService(&_LifecycleEventHandler_serviceDesc, srv)
+func RegisterEventHandlerServer(s *grpc.Server, srv EventHandlerServer) {
+	s.RegisterService(&_EventHandler_serviceDesc, srv)
 }
 
-func _LifecycleEventHandler_Notify_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _EventHandler_Notify_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(Event)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(LifecycleEventHandlerServer).Notify(ctx, in)
+		return srv.(EventHandlerServer).Notify(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/lifecycle.LifecycleEventHandler/Notify",
+		FullMethod: "/lifecycle.EventHandler/Notify",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(LifecycleEventHandlerServer).Notify(ctx, req.(*Event))
+		return srv.(EventHandlerServer).Notify(ctx, req.(*Event))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-var _LifecycleEventHandler_serviceDesc = grpc.ServiceDesc{
-	ServiceName: "lifecycle.LifecycleEventHandler",
-	HandlerType: (*LifecycleEventHandlerServer)(nil),
+var _EventHandler_serviceDesc = grpc.ServiceDesc{
+	ServiceName: "lifecycle.EventHandler",
+	HandlerType: (*EventHandlerServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
 			MethodName: "Notify",
-			Handler:    _LifecycleEventHandler_Notify_Handler,
+			Handler:    _EventHandler_Notify_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
@@ -313,6 +390,12 @@ func (m *RegisterRequest) MarshalTo(data []byte) (int, error) {
 		i = encodeVarintApi(data, i, uint64(len(m.Name)))
 		i += copy(data[i:], m.Name)
 	}
+	if len(m.Token) > 0 {
+		data[i] = 0x1a
+		i++
+		i = encodeVarintApi(data, i, uint64(len(m.Token)))
+		i += copy(data[i:], m.Token)
+	}
 	return i, nil
 }
 
@@ -327,6 +410,66 @@ func (m *RegisterReply) Marshal() (data []byte, err error) {
 }
 
 func (m *RegisterReply) MarshalTo(data []byte) (int, error) {
+	var i int
+	_ = i
+	var l int
+	_ = l
+	if len(m.Error) > 0 {
+		data[i] = 0xa
+		i++
+		i = encodeVarintApi(data, i, uint64(len(m.Error)))
+		i += copy(data[i:], m.Error)
+	}
+	if len(m.Token) > 0 {
+		data[i] = 0x12
+		i++
+		i = encodeVarintApi(data, i, uint64(len(m.Token)))
+		i += copy(data[i:], m.Token)
+	}
+	return i, nil
+}
+
+func (m *UnregisterRequest) Marshal() (data []byte, err error) {
+	size := m.Size()
+	data = make([]byte, size)
+	n, err := m.MarshalTo(data)
+	if err != nil {
+		return nil, err
+	}
+	return data[:n], nil
+}
+
+func (m *UnregisterRequest) MarshalTo(data []byte) (int, error) {
+	var i int
+	_ = i
+	var l int
+	_ = l
+	if len(m.Name) > 0 {
+		data[i] = 0xa
+		i++
+		i = encodeVarintApi(data, i, uint64(len(m.Name)))
+		i += copy(data[i:], m.Name)
+	}
+	if len(m.Token) > 0 {
+		data[i] = 0x12
+		i++
+		i = encodeVarintApi(data, i, uint64(len(m.Token)))
+		i += copy(data[i:], m.Token)
+	}
+	return i, nil
+}
+
+func (m *UnregisterReply) Marshal() (data []byte, err error) {
+	size := m.Size()
+	data = make([]byte, size)
+	n, err := m.MarshalTo(data)
+	if err != nil {
+		return nil, err
+	}
+	return data[:n], nil
+}
+
+func (m *UnregisterReply) MarshalTo(data []byte) (int, error) {
 	var i int
 	_ = i
 	var l int
@@ -355,11 +498,10 @@ func (m *Event) MarshalTo(data []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
-	if len(m.Name) > 0 {
-		data[i] = 0xa
+	if m.Kind != 0 {
+		data[i] = 0x8
 		i++
-		i = encodeVarintApi(data, i, uint64(len(m.Name)))
-		i += copy(data[i:], m.Name)
+		i = encodeVarintApi(data, i, uint64(m.Kind))
 	}
 	if m.CgroupInfo != nil {
 		data[i] = 0x12
@@ -475,10 +617,42 @@ func (m *RegisterRequest) Size() (n int) {
 	if l > 0 {
 		n += 1 + l + sovApi(uint64(l))
 	}
+	l = len(m.Token)
+	if l > 0 {
+		n += 1 + l + sovApi(uint64(l))
+	}
 	return n
 }
 
 func (m *RegisterReply) Size() (n int) {
+	var l int
+	_ = l
+	l = len(m.Error)
+	if l > 0 {
+		n += 1 + l + sovApi(uint64(l))
+	}
+	l = len(m.Token)
+	if l > 0 {
+		n += 1 + l + sovApi(uint64(l))
+	}
+	return n
+}
+
+func (m *UnregisterRequest) Size() (n int) {
+	var l int
+	_ = l
+	l = len(m.Name)
+	if l > 0 {
+		n += 1 + l + sovApi(uint64(l))
+	}
+	l = len(m.Token)
+	if l > 0 {
+		n += 1 + l + sovApi(uint64(l))
+	}
+	return n
+}
+
+func (m *UnregisterReply) Size() (n int) {
 	var l int
 	_ = l
 	l = len(m.Error)
@@ -491,9 +665,8 @@ func (m *RegisterReply) Size() (n int) {
 func (m *Event) Size() (n int) {
 	var l int
 	_ = l
-	l = len(m.Name)
-	if l > 0 {
-		n += 1 + l + sovApi(uint64(l))
+	if m.Kind != 0 {
+		n += 1 + sovApi(uint64(m.Kind))
 	}
 	if m.CgroupInfo != nil {
 		l = m.CgroupInfo.Size()
@@ -549,6 +722,7 @@ func (this *RegisterRequest) String() string {
 	s := strings.Join([]string{`&RegisterRequest{`,
 		`SocketAddress:` + fmt.Sprintf("%v", this.SocketAddress) + `,`,
 		`Name:` + fmt.Sprintf("%v", this.Name) + `,`,
+		`Token:` + fmt.Sprintf("%v", this.Token) + `,`,
 		`}`,
 	}, "")
 	return s
@@ -559,6 +733,28 @@ func (this *RegisterReply) String() string {
 	}
 	s := strings.Join([]string{`&RegisterReply{`,
 		`Error:` + fmt.Sprintf("%v", this.Error) + `,`,
+		`Token:` + fmt.Sprintf("%v", this.Token) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *UnregisterRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&UnregisterRequest{`,
+		`Name:` + fmt.Sprintf("%v", this.Name) + `,`,
+		`Token:` + fmt.Sprintf("%v", this.Token) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *UnregisterReply) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&UnregisterReply{`,
+		`Error:` + fmt.Sprintf("%v", this.Error) + `,`,
 		`}`,
 	}, "")
 	return s
@@ -568,7 +764,7 @@ func (this *Event) String() string {
 		return "nil"
 	}
 	s := strings.Join([]string{`&Event{`,
-		`Name:` + fmt.Sprintf("%v", this.Name) + `,`,
+		`Kind:` + fmt.Sprintf("%v", this.Kind) + `,`,
 		`CgroupInfo:` + strings.Replace(fmt.Sprintf("%v", this.CgroupInfo), "CgroupInfo", "CgroupInfo", 1) + `,`,
 		`}`,
 	}, "")
@@ -691,6 +887,35 @@ func (m *RegisterRequest) Unmarshal(data []byte) error {
 			}
 			m.Name = string(data[iNdEx:postIndex])
 			iNdEx = postIndex
+		case 3:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Token", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowApi
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := data[iNdEx]
+				iNdEx++
+				stringLen |= (uint64(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthApi
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Token = string(data[iNdEx:postIndex])
+			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
 			skippy, err := skipApi(data[iNdEx:])
@@ -739,6 +964,222 @@ func (m *RegisterReply) Unmarshal(data []byte) error {
 		}
 		if fieldNum <= 0 {
 			return fmt.Errorf("proto: RegisterReply: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Error", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowApi
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := data[iNdEx]
+				iNdEx++
+				stringLen |= (uint64(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthApi
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Error = string(data[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Token", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowApi
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := data[iNdEx]
+				iNdEx++
+				stringLen |= (uint64(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthApi
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Token = string(data[iNdEx:postIndex])
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipApi(data[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthApi
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *UnregisterRequest) Unmarshal(data []byte) error {
+	l := len(data)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowApi
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := data[iNdEx]
+			iNdEx++
+			wire |= (uint64(b) & 0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: UnregisterRequest: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: UnregisterRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Name", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowApi
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := data[iNdEx]
+				iNdEx++
+				stringLen |= (uint64(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthApi
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Name = string(data[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Token", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowApi
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := data[iNdEx]
+				iNdEx++
+				stringLen |= (uint64(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthApi
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Token = string(data[iNdEx:postIndex])
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipApi(data[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthApi
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *UnregisterReply) Unmarshal(data []byte) error {
+	l := len(data)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowApi
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := data[iNdEx]
+			iNdEx++
+			wire |= (uint64(b) & 0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: UnregisterReply: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: UnregisterReply: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		case 1:
@@ -821,10 +1262,10 @@ func (m *Event) Unmarshal(data []byte) error {
 		}
 		switch fieldNum {
 		case 1:
-			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Name", wireType)
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Kind", wireType)
 			}
-			var stringLen uint64
+			m.Kind = 0
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
 					return ErrIntOverflowApi
@@ -834,21 +1275,11 @@ func (m *Event) Unmarshal(data []byte) error {
 				}
 				b := data[iNdEx]
 				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
+				m.Kind |= (Event_Kind(b) & 0x7F) << shift
 				if b < 0x80 {
 					break
 				}
 			}
-			intStringLen := int(stringLen)
-			if intStringLen < 0 {
-				return ErrInvalidLengthApi
-			}
-			postIndex := iNdEx + intStringLen
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			m.Name = string(data[iNdEx:postIndex])
-			iNdEx = postIndex
 		case 2:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field CgroupInfo", wireType)
@@ -1219,30 +1650,36 @@ var (
 )
 
 var fileDescriptorApi = []byte{
-	// 397 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x09, 0x6e, 0x88, 0x02, 0xff, 0x9c, 0x92, 0x4d, 0xeb, 0xd3, 0x40,
-	0x10, 0xc6, 0xb3, 0x7f, 0xdb, 0x6a, 0xa6, 0x54, 0xc3, 0x62, 0xa5, 0x04, 0x09, 0x12, 0x14, 0xbd,
-	0x98, 0x42, 0x0a, 0xde, 0xfb, 0x06, 0x96, 0x96, 0x56, 0x53, 0x4f, 0x22, 0x48, 0x5e, 0x36, 0xe9,
-	0xd2, 0x34, 0x1b, 0x37, 0x1b, 0x21, 0x37, 0x3f, 0x82, 0x1f, 0xab, 0x47, 0x8f, 0x1e, 0x6d, 0xfc,
-	0x22, 0x92, 0xed, 0xab, 0xa5, 0x78, 0xf0, 0xf6, 0xcc, 0x3c, 0xcf, 0xfc, 0x92, 0x99, 0x04, 0x54,
-	0x37, 0xa5, 0x56, 0xca, 0x99, 0x60, 0x58, 0x8d, 0x69, 0x48, 0xfc, 0xc2, 0x8f, 0x89, 0xfe, 0x3a,
-	0xa2, 0x62, 0x95, 0x7b, 0x96, 0xcf, 0x36, 0xdd, 0x88, 0x45, 0xac, 0x2b, 0x13, 0x5e, 0x1e, 0xca,
-	0x4a, 0x16, 0x52, 0xed, 0x27, 0xcd, 0x29, 0x3c, 0x72, 0x48, 0x44, 0x33, 0x41, 0xb8, 0x43, 0xbe,
-	0xe4, 0x24, 0x13, 0xf8, 0x39, 0xb4, 0x32, 0xe6, 0xaf, 0x89, 0xe8, 0x07, 0x01, 0x27, 0x59, 0xd6,
-	0x41, 0xcf, 0xd0, 0x2b, 0xd5, 0xf9, 0xbb, 0x89, 0x31, 0xd4, 0x12, 0x77, 0x43, 0x3a, 0x77, 0xd2,
-	0x94, 0xda, 0x7c, 0x01, 0xad, 0x33, 0x2c, 0x8d, 0x0b, 0xfc, 0x18, 0xea, 0x84, 0x73, 0xc6, 0x0f,
-	0x88, 0x7d, 0x61, 0x2e, 0xa1, 0x3e, 0xfe, 0x4a, 0x12, 0x71, 0x62, 0xa0, 0x33, 0x03, 0xbf, 0x81,
-	0xa6, 0x1f, 0x71, 0x96, 0xa7, 0x9f, 0x69, 0x12, 0x32, 0x89, 0x6f, 0xda, 0x6d, 0xeb, 0xb4, 0xa0,
-	0x35, 0x94, 0xee, 0x24, 0x09, 0x99, 0x03, 0xfe, 0x49, 0x9b, 0x1f, 0x01, 0x24, 0xf4, 0x1f, 0x0f,
-	0xfe, 0x6f, 0x76, 0x01, 0x70, 0x76, 0xb0, 0x05, 0xb5, 0x35, 0x4d, 0x02, 0x89, 0x7e, 0x68, 0xeb,
-	0x37, 0xc7, 0xad, 0x29, 0x4d, 0x02, 0x47, 0xe6, 0xaa, 0x2d, 0x53, 0x57, 0xac, 0x8e, 0x97, 0xaa,
-	0xb4, 0xf9, 0x12, 0x6a, 0x55, 0x02, 0xdf, 0x87, 0x7b, 0xef, 0x17, 0x4b, 0x4d, 0xa9, 0xc4, 0xbb,
-	0xc5, 0x48, 0x43, 0xb8, 0x05, 0xea, 0x70, 0x31, 0xff, 0xd0, 0x9f, 0xcc, 0xc7, 0x8e, 0x76, 0x67,
-	0x7f, 0x82, 0x27, 0xd3, 0xdc, 0x23, 0x31, 0x11, 0x72, 0xbb, 0x11, 0xcd, 0x52, 0x57, 0xf8, 0x2b,
-	0xc2, 0xf1, 0x00, 0x1e, 0x1c, 0x8f, 0x8d, 0x2f, 0x5f, 0xe2, 0xea, 0x73, 0xea, 0x9d, 0x9b, 0x5e,
-	0x1a, 0x17, 0xa6, 0x62, 0xcf, 0xa0, 0x3d, 0x3b, 0x9a, 0x92, 0xff, 0xd6, 0x4d, 0x82, 0x98, 0x70,
-	0xdc, 0x83, 0xc6, 0x9c, 0x09, 0x1a, 0x16, 0x58, 0xbb, 0x18, 0x97, 0x11, 0xbd, 0x7d, 0xdd, 0x39,
-	0xd0, 0x06, 0x4f, 0xb7, 0x3b, 0x03, 0xfd, 0xdc, 0x19, 0xca, 0xb7, 0xd2, 0x40, 0xdb, 0xd2, 0x40,
-	0x3f, 0x4a, 0x03, 0xfd, 0x2a, 0x0d, 0xf4, 0xfd, 0xb7, 0xa1, 0x78, 0x0d, 0xf9, 0xc3, 0xf5, 0xfe,
-	0x04, 0x00, 0x00, 0xff, 0xff, 0xb0, 0xc0, 0xfa, 0x96, 0xb7, 0x02, 0x00, 0x00,
+	// 486 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x09, 0x6e, 0x88, 0x02, 0xff, 0x9c, 0x53, 0x4d, 0x6f, 0xd3, 0x40,
+	0x10, 0xf5, 0xa6, 0x69, 0x21, 0x53, 0x42, 0xdc, 0x15, 0x48, 0x91, 0x55, 0x59, 0xc8, 0x42, 0x2a,
+	0x48, 0xe0, 0x4a, 0xa9, 0xc4, 0x05, 0x71, 0x48, 0x93, 0x48, 0xad, 0x90, 0xe2, 0xe0, 0x98, 0x0b,
+	0x97, 0xc8, 0xb1, 0xd7, 0xce, 0x2a, 0xee, 0xae, 0x59, 0x6f, 0x90, 0x7c, 0xe3, 0x27, 0x70, 0xe4,
+	0xc6, 0xdf, 0xe9, 0x91, 0x23, 0x47, 0x1a, 0xfe, 0x08, 0xca, 0xe6, 0xcb, 0x49, 0x13, 0x0e, 0xdc,
+	0x66, 0xe6, 0xcd, 0x9b, 0x37, 0xb3, 0x7e, 0x86, 0x8a, 0x9f, 0x52, 0x3b, 0x15, 0x5c, 0x72, 0x5c,
+	0x49, 0x68, 0x44, 0x82, 0x3c, 0x48, 0x88, 0xf1, 0x3a, 0xa6, 0x72, 0x34, 0x19, 0xda, 0x01, 0xbf,
+	0x39, 0x8f, 0x79, 0xcc, 0xcf, 0x55, 0xc7, 0x70, 0x12, 0xa9, 0x4c, 0x25, 0x2a, 0x9a, 0x33, 0x2d,
+	0x1f, 0x6a, 0x2e, 0x89, 0x69, 0x26, 0x89, 0x70, 0xc9, 0xe7, 0x09, 0xc9, 0x24, 0x7e, 0x0e, 0xd5,
+	0x8c, 0x07, 0x63, 0x22, 0x9b, 0x61, 0x28, 0x48, 0x96, 0xd5, 0xd1, 0x33, 0xf4, 0xa2, 0xe2, 0x6e,
+	0x16, 0x31, 0x86, 0x32, 0xf3, 0x6f, 0x48, 0xbd, 0xa4, 0x40, 0x15, 0xe3, 0x27, 0x70, 0x28, 0xf9,
+	0x98, 0xb0, 0xfa, 0x81, 0x2a, 0xce, 0x13, 0xeb, 0x2d, 0x54, 0xd7, 0x12, 0x69, 0x92, 0xcf, 0xda,
+	0x88, 0x10, 0x5c, 0x2c, 0x06, 0xcf, 0x93, 0x35, 0xb9, 0x54, 0x24, 0xbf, 0x83, 0x93, 0x8f, 0x4c,
+	0x6c, 0x6d, 0xb8, 0xd4, 0x46, 0xbb, 0xb4, 0x37, 0xe8, 0x67, 0x50, 0x2b, 0xd2, 0xf7, 0xaa, 0x5b,
+	0xdf, 0x11, 0x1c, 0x76, 0xbe, 0x10, 0x26, 0xf1, 0x4b, 0x28, 0x8f, 0x29, 0x0b, 0x15, 0xfc, 0xb8,
+	0xf1, 0xd4, 0x5e, 0x3d, 0xad, 0xad, 0x70, 0xfb, 0x3d, 0x65, 0xa1, 0xab, 0x5a, 0xf0, 0x1b, 0x38,
+	0x0e, 0x62, 0xc1, 0x27, 0xe9, 0x80, 0xb2, 0x88, 0x2b, 0xe5, 0xe3, 0x0d, 0x46, 0x4b, 0xa1, 0xd7,
+	0x2c, 0xe2, 0x2e, 0x04, 0xab, 0xd8, 0x7a, 0x05, 0xe5, 0xd9, 0x14, 0x7c, 0x02, 0xd5, 0x9e, 0xd3,
+	0x1e, 0xf4, 0xdc, 0xce, 0xa0, 0xef, 0x35, 0x5d, 0x4f, 0xd7, 0x56, 0x25, 0xa7, 0xef, 0x0d, 0xfa,
+	0x9e, 0xd3, 0xd3, 0x91, 0xf5, 0x09, 0x40, 0x29, 0xff, 0xeb, 0xf1, 0xfe, 0x77, 0x93, 0x1c, 0x60,
+	0x8d, 0x60, 0x7b, 0xe3, 0x74, 0x63, 0x27, 0xbd, 0x78, 0x3f, 0x86, 0x72, 0xea, 0xcb, 0xd1, 0xd2,
+	0x03, 0xb3, 0xd8, 0x3a, 0x5b, 0xdc, 0xf6, 0x00, 0x0e, 0x3e, 0x38, 0x7d, 0x5d, 0x9b, 0x05, 0x3d,
+	0xa7, 0xad, 0x23, 0x5c, 0x85, 0x4a, 0xcb, 0xe9, 0x7a, 0xcd, 0xeb, 0x6e, 0xc7, 0xd5, 0x4b, 0x8d,
+	0x1f, 0x08, 0x6a, 0xea, 0xae, 0x36, 0xcd, 0x52, 0x5f, 0x06, 0x23, 0x22, 0xf0, 0x25, 0x3c, 0x5c,
+	0x5a, 0x05, 0x17, 0xe5, 0xb7, 0x2c, 0x6a, 0xd4, 0x77, 0x62, 0x69, 0x92, 0x5b, 0x1a, 0xbe, 0x02,
+	0x58, 0x7f, 0x72, 0x7c, 0x5a, 0xe8, 0xbc, 0x67, 0x24, 0xc3, 0xd8, 0x83, 0xaa, 0x49, 0x8d, 0x16,
+	0x3c, 0x52, 0x0b, 0x5e, 0xf9, 0x2c, 0x4c, 0x88, 0xc0, 0x17, 0x70, 0xd4, 0xe5, 0x92, 0x46, 0x39,
+	0xd6, 0xb7, 0x5d, 0x61, 0xdc, 0xf3, 0xc9, 0x62, 0xc8, 0xe5, 0xe9, 0xed, 0x9d, 0x89, 0x7e, 0xdd,
+	0x99, 0xda, 0xd7, 0xa9, 0x89, 0x6e, 0xa7, 0x26, 0xfa, 0x39, 0x35, 0xd1, 0xef, 0xa9, 0x89, 0xbe,
+	0xfd, 0x31, 0xb5, 0xe1, 0x91, 0xfa, 0x0b, 0x2f, 0xfe, 0x06, 0x00, 0x00, 0xff, 0xff, 0xb7, 0xb1,
+	0x5b, 0x03, 0xcc, 0x03, 0x00, 0x00,
 }
