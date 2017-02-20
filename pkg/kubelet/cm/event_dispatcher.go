@@ -46,8 +46,10 @@ type EventDispatcher interface {
 type registeredHandler struct {
 	// name by which the handler registered itself, unique
 	name string
-	// The client end of the event handler service.
+	// client end of the event handler service.
 	client lifecycle.LifecycleEventHandlerClient
+	// token to identify this registration
+	token string
 }
 
 type eventDispatcher struct {
@@ -56,24 +58,26 @@ type eventDispatcher struct {
 
 func newEventDispatcher() *eventDispatcher {
 	return &eventDispatcher{
-		handlers: []registeredHandler{},
+		handlers: map[string]registeredHandler{},
 	}
 }
 
-func (ed *eventDispatcher) dispatchEvent(cgroupPath, eventName string) error {
+func (ed *eventDispatcher) dispatchEvent(cgroupPath, kind lifecycle.Event_Kind) error {
 	// construct an event
 	ev := &lifecycle.Event{
-		Name: eventName,
+		Kind: kind,
 		CgroupInfo: &lifecycle.CgroupInfo{
 			Kind: lifecycle.CgroupInfo_POD,
 			Path: cgroupPath,
 		},
 	}
 
-	for _, handler := range ed.handlers {
+	// TODO(CD): Re-evaluate nondeterministic delegation order arising
+	//           from Go map iteration.
+	for name, handler := range ed.handlers {
 		// TODO(CD): Improve this by building a cancelable context
 		ctx := context.Background()
-		glog.Infof("Dispatching to event handler: %s", handler.name)
+		glog.Infof("Dispatching to event handler: %s", name)
 		reply, err := handler.client.Notify(ctx, ev)
 		if err != nil {
 			return err
@@ -87,11 +91,11 @@ func (ed *eventDispatcher) dispatchEvent(cgroupPath, eventName string) error {
 }
 
 func (ed *eventDispatcher) PreStartPod(cgroupPath string) error {
-	return ed.dispatchEvent(cgroupPath, "PRE_START")
+	return ed.dispatchEvent(cgroupPath, lifecycle.Event_POD_PRE_START)
 }
 
 func (ed *eventDispatcher) PostStopPod(cgroupPath string) error {
-	return ed.dispatchEvent(cgroupPath, "POST_STOP")
+	return ed.dispatchEvent(cgroupPath, lifecycle.Event_POD_POST_STOP)
 }
 
 func (ed *eventDispatcher) Start(socketAddress string) {
@@ -115,12 +119,68 @@ func (ed *eventDispatcher) Start(socketAddress string) {
 	}()
 }
 
-func (ed *eventDispatcher) Register(context.Context, *lifecycle.RegisterRequest) (*lifecycle.RegisterReply, error) {
-	// TODO
+func (ed *eventDispatcher) Register(ctx context.Context, request *lifecycle.RegisterRequest) (*lifecycle.RegisterReply, error) {
+	// Create a gRPC client connection
+	cxn := nil // TODO(CD): Create cxn
 
 	// Create a registeredHandler instance
+	h := &registeredHandler{
+		name:   request.Name,
+		client: lifecycle.NewLifecycleEventHandlerClient(cxn),
+		token:  newToken(),
+	}
+
+	log.Info("attempting to register event handler [%s]", h.name)
+
 	// Check registered name for uniqueness
-	// Add registeredHandler to the slice of handlers
-	// Construct and return a reply
-	return &lifecycle.RegisterReply{}, nil
+	reg := handler(h.name)
+	if reg != nil {
+		if reg.token != request.token {
+			msg := fmt.Sprintf("registration failed: an event handler named [%s] is already registered and the supplied registration token does not match.", reg.name)
+			log.Warning(msg)
+			return &lifecycle.RegisterReply{Error: msg}, nil
+		}
+		log.Info("re-registering event handler [%s]", h.name)
+	}
+
+	// Save registeredHandler
+	ed.handlers[h.name] = h
+
+	return &lifecycle.RegisterReply{Token: h.token}, nil
 }
+
+func (ed *eventDispatcher) Unregister(ctx context.Context, request *lifecycle.UnregisterRequest) (*lifecycle.UnregisterReply, error) {
+	reg := handler(request.name)
+	if reg == nil {
+		msg = fmt.Sprintf("unregistration failed: no handler named [%s] is currently registered.", request.name)
+		log.Warning(msg)
+		return &lifecycle.UnregisterReply{Error: msg}, nil
+	}
+	if reg.token != request.token {
+		msg = fmt.Sprintf("unregistration failed: token mismatch for handler [%s].", request.name)
+		log.Warning(msg)
+		return &lifecycle.UnregisterReply{Error: msg}, nil
+	}
+	delete(ed.handlers, request.name)
+	return &lifecycle.UnregisterReply{}, nil
+}
+
+func (ed *eventDispatcher) handler(name string) *registeredHandler {
+	for _, h := range ed.registeredHandlers {
+		if h.name == name {
+			return h
+		}
+	}
+	return nil
+}
+
+func newToken() string {
+	// TODO(CD): Generate and return a new UUIDv4 here
+	return "foobar"
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// TODO(CD)
+///////////////////////////////////////////////////////////////////////////////
+//
+// - Handle disconnection
