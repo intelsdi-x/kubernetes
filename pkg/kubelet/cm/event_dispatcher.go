@@ -18,11 +18,14 @@ package cm
 
 import (
 	"errors"
+	"fmt"
 	"net"
+	"sync"
 
 	"github.com/golang/glog"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
+	"k8s.io/apimachinery/pkg/util/uuid"
 	"k8s.io/kubernetes/pkg/kubelet/api/v1alpha1/lifecycle"
 )
 
@@ -39,30 +42,32 @@ type EventDispatcher interface {
 
 	// Start starts the dispatcher. After the dispatcher is started , handlers
 	// can register themselves to receive lifecycle events.
-	Start()
+	Start(socketAddress string)
 }
 
 // Represents a registered event handler
 type registeredHandler struct {
 	// name by which the handler registered itself, unique
 	name string
-	// client end of the event handler service.
-	client lifecycle.LifecycleEventHandlerClient
+	// location of the event handler service.
+	socketAddress string
 	// token to identify this registration
 	token string
 }
 
 type eventDispatcher struct {
-	handlers []registeredHandler
+	sync.Mutex
+	started  bool
+	handlers map[string]*registeredHandler
 }
 
 func newEventDispatcher() *eventDispatcher {
 	return &eventDispatcher{
-		handlers: map[string]registeredHandler{},
+		handlers: map[string]*registeredHandler{},
 	}
 }
 
-func (ed *eventDispatcher) dispatchEvent(cgroupPath, kind lifecycle.Event_Kind) error {
+func (ed *eventDispatcher) dispatchEvent(cgroupPath string, kind lifecycle.Event_Kind) error {
 	// construct an event
 	ev := &lifecycle.Event{
 		Kind: kind,
@@ -77,8 +82,18 @@ func (ed *eventDispatcher) dispatchEvent(cgroupPath, kind lifecycle.Event_Kind) 
 	for name, handler := range ed.handlers {
 		// TODO(CD): Improve this by building a cancelable context
 		ctx := context.Background()
+
+		// Create a gRPC client connection
+		// TODO(CD): Use SSL to connect to event handlers
+		cxn, err := grpc.Dial(handler.socketAddress, grpc.WithInsecure())
+		if err != nil {
+			glog.Fatalf("failed to connect to event handler [%s] at [%s]: %v", handler.name, handler.socketAddress, err)
+		}
+		defer cxn.Close()
+		client := lifecycle.NewEventHandlerClient(cxn)
+
 		glog.Infof("Dispatching to event handler: %s", name)
-		reply, err := handler.client.Notify(ctx, ev)
+		reply, err := client.Notify(ctx, ev)
 		if err != nil {
 			return err
 		}
@@ -99,6 +114,16 @@ func (ed *eventDispatcher) PostStopPod(cgroupPath string) error {
 }
 
 func (ed *eventDispatcher) Start(socketAddress string) {
+	ed.Lock()
+	defer ed.Unlock()
+
+	if ed.started {
+		glog.Info("event dispatcher is already running")
+		return
+	}
+
+	glog.Infof("starting event dispatcher server at [%s]", socketAddress)
+
 	// Set up server bind address.
 	lis, err := net.Listen("tcp", socketAddress)
 	if err != nil {
@@ -109,7 +134,7 @@ func (ed *eventDispatcher) Start(socketAddress string) {
 	s := grpc.NewServer()
 
 	// Register self as KubeletEventDispatcherServer.
-	lifecycle.RegisterKubeletEventDispatcherServer(s, ed)
+	lifecycle.RegisterEventDispatcherServer(s, ed)
 
 	// Start listen in a separate goroutine.
 	go func() {
@@ -117,30 +142,29 @@ func (ed *eventDispatcher) Start(socketAddress string) {
 			glog.Fatalf("failed to start event dispatcher server: %v", err)
 		}
 	}()
+
+	ed.started = true
 }
 
 func (ed *eventDispatcher) Register(ctx context.Context, request *lifecycle.RegisterRequest) (*lifecycle.RegisterReply, error) {
-	// Create a gRPC client connection
-	cxn := nil // TODO(CD): Create cxn
-
 	// Create a registeredHandler instance
 	h := &registeredHandler{
-		name:   request.Name,
-		client: lifecycle.NewLifecycleEventHandlerClient(cxn),
-		token:  newToken(),
+		name:          request.Name,
+		socketAddress: request.SocketAddress,
+		token:         string(uuid.NewUUID()),
 	}
 
-	log.Info("attempting to register event handler [%s]", h.name)
+	glog.Infof("attempting to register event handler [%s]", h.name)
 
 	// Check registered name for uniqueness
-	reg := handler(h.name)
+	reg := ed.handler(h.name)
 	if reg != nil {
-		if reg.token != request.token {
+		if reg.token != request.Token {
 			msg := fmt.Sprintf("registration failed: an event handler named [%s] is already registered and the supplied registration token does not match.", reg.name)
-			log.Warning(msg)
+			glog.Warning(msg)
 			return &lifecycle.RegisterReply{Error: msg}, nil
 		}
-		log.Info("re-registering event handler [%s]", h.name)
+		glog.Infof("re-registering event handler [%s]", h.name)
 	}
 
 	// Save registeredHandler
@@ -150,37 +174,26 @@ func (ed *eventDispatcher) Register(ctx context.Context, request *lifecycle.Regi
 }
 
 func (ed *eventDispatcher) Unregister(ctx context.Context, request *lifecycle.UnregisterRequest) (*lifecycle.UnregisterReply, error) {
-	reg := handler(request.name)
+	reg := ed.handler(request.Name)
 	if reg == nil {
-		msg = fmt.Sprintf("unregistration failed: no handler named [%s] is currently registered.", request.name)
-		log.Warning(msg)
+		msg := fmt.Sprintf("unregistration failed: no handler named [%s] is currently registered.", request.Name)
+		glog.Warning(msg)
 		return &lifecycle.UnregisterReply{Error: msg}, nil
 	}
-	if reg.token != request.token {
-		msg = fmt.Sprintf("unregistration failed: token mismatch for handler [%s].", request.name)
-		log.Warning(msg)
+	if reg.token != request.Token {
+		msg := fmt.Sprintf("unregistration failed: token mismatch for handler [%s].", request.Name)
+		glog.Warning(msg)
 		return &lifecycle.UnregisterReply{Error: msg}, nil
 	}
-	delete(ed.handlers, request.name)
+	delete(ed.handlers, request.Name)
 	return &lifecycle.UnregisterReply{}, nil
 }
 
 func (ed *eventDispatcher) handler(name string) *registeredHandler {
-	for _, h := range ed.registeredHandlers {
+	for _, h := range ed.handlers {
 		if h.name == name {
 			return h
 		}
 	}
 	return nil
 }
-
-func newToken() string {
-	// TODO(CD): Generate and return a new UUIDv4 here
-	return "foobar"
-}
-
-///////////////////////////////////////////////////////////////////////////////
-// TODO(CD)
-///////////////////////////////////////////////////////////////////////////////
-//
-// - Handle disconnection
