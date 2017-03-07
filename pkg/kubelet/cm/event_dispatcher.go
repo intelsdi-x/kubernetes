@@ -61,10 +61,17 @@ type eventDispatcher struct {
 	handlers map[string]*registeredHandler
 }
 
+var dispatcher *eventDispatcher
+
+var once sync.Once
+
 func newEventDispatcher() *eventDispatcher {
-	return &eventDispatcher{
-		handlers: map[string]*registeredHandler{},
-	}
+	once.Do(func() {
+		dispatcher = &eventDispatcher{
+			handlers: map[string]*registeredHandler{},
+		}
+	})
+	return dispatcher
 }
 
 func (ed *eventDispatcher) dispatchEvent(cgroupPath string, kind lifecycle.Event_Kind) error {
