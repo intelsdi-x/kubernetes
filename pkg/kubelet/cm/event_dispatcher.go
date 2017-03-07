@@ -25,7 +25,9 @@ import (
 	"github.com/golang/glog"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
-	"k8s.io/apimachinery/pkg/util/uuid"
+	//TODO Below keeps changing from version to version
+	//"k8s.io/apimachinery/pkg/util/uuid"
+	"k8s.io/kubernetes/pkg/util/uuid"
 	"k8s.io/kubernetes/pkg/kubelet/api/v1alpha1/lifecycle"
 )
 
@@ -70,6 +72,7 @@ func newEventDispatcher() *eventDispatcher {
 		dispatcher = &eventDispatcher{
 			handlers: map[string]*registeredHandler{},
 		}
+		dispatcher.Start(":5433") // "life" on a North American keypad
 	})
 	return dispatcher
 }
