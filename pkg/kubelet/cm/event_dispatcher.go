@@ -25,8 +25,6 @@ import (
 	"github.com/golang/glog"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
-	//TODO Below keeps changing from version to version
-	//"k8s.io/apimachinery/pkg/util/uuid"
 	"k8s.io/kubernetes/pkg/util/uuid"
 	"k8s.io/kubernetes/pkg/kubelet/api/v1alpha1/lifecycle"
 )
