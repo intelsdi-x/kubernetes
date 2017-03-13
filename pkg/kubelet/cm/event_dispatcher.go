@@ -17,6 +17,7 @@ limitations under the License.
 package cm
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
@@ -25,8 +26,9 @@ import (
 	"github.com/golang/glog"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
-	"k8s.io/kubernetes/pkg/util/uuid"
+	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/kubelet/api/v1alpha1/lifecycle"
+	"k8s.io/kubernetes/pkg/util/uuid"
 )
 
 // EventDispatcher manages a set of registered lifecycle event handlers and
@@ -34,11 +36,11 @@ import (
 type EventDispatcher interface {
 	// PreStartPod is invoked after the pod sandbox is created but before any
 	// of a pod's containers are started.
-	PreStartPod(cgroupPath string) error
+	PreStartPod(pod *api.Pod, cgroupPath string) error
 
 	// PostStopPod is invoked after all of a pod's containers have permanently
 	// stopped running, but before the pod sandbox is destroyed.
-	PostStopPod(cgroupPath string) error
+	PostStopPod(pod *api.Pod, cgroupPath string) error
 
 	// Start starts the dispatcher. After the dispatcher is started , handlers
 	// can register themselves to receive lifecycle events.
@@ -61,7 +63,6 @@ type eventDispatcher struct {
 	handlers map[string]*registeredHandler
 }
 
-
 var dispatcher *eventDispatcher
 var once sync.Once
 
@@ -75,7 +76,11 @@ func newEventDispatcher() *eventDispatcher {
 	return dispatcher
 }
 
-func (ed *eventDispatcher) dispatchEvent(cgroupPath string, kind lifecycle.Event_Kind) error {
+func (ed *eventDispatcher) dispatchEvent(pod *api.Pod, cgroupPath string, kind lifecycle.Event_Kind) error {
+	jsonPod, err := json.Marshal(pod)
+	if err != nil {
+		return err
+	}
 	// construct an event
 	ev := &lifecycle.Event{
 		Kind: kind,
@@ -83,6 +88,7 @@ func (ed *eventDispatcher) dispatchEvent(cgroupPath string, kind lifecycle.Event
 			Kind: lifecycle.CgroupInfo_POD,
 			Path: cgroupPath,
 		},
+		Pod: jsonPod,
 	}
 
 	// TODO(CD): Re-evaluate nondeterministic delegation order arising
@@ -113,12 +119,12 @@ func (ed *eventDispatcher) dispatchEvent(cgroupPath string, kind lifecycle.Event
 	return nil
 }
 
-func (ed *eventDispatcher) PreStartPod(cgroupPath string) error {
-	return ed.dispatchEvent(cgroupPath, lifecycle.Event_POD_PRE_START)
+func (ed *eventDispatcher) PreStartPod(pod *api.Pod, cgroupPath string) error {
+	return ed.dispatchEvent(pod, cgroupPath, lifecycle.Event_POD_PRE_START)
 }
 
-func (ed *eventDispatcher) PostStopPod(cgroupPath string) error {
-	return ed.dispatchEvent(cgroupPath, lifecycle.Event_POD_POST_STOP)
+func (ed *eventDispatcher) PostStopPod(pod *api.Pod, cgroupPath string) error {
+	return ed.dispatchEvent(pod, cgroupPath, lifecycle.Event_POD_POST_STOP)
 }
 
 func (ed *eventDispatcher) Start(socketAddress string) {
