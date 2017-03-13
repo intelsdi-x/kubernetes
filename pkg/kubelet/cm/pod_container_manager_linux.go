@@ -84,7 +84,7 @@ func (m *podContainerManagerImpl) EnsureExists(pod *v1.Pod) error {
 		}
 		// Dispatch events to subscribed event handlers, if any.
 		// TODO(CD): Ensure it's ok to do this before calling applyLimits
-		m.eventDispatcher.PreStartPod(string(podContainerName))
+		m.eventDispatcher.PreStartPod(pod, string(podContainerName))
 	}
 	// Apply appropriate resource limits on the pod container
 	// Top level qos containers limits are not updated
