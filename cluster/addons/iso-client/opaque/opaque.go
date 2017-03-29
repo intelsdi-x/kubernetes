@@ -20,7 +20,7 @@ type OpaqueIntegerResourceAdvertiser struct {
 }
 
 // body for opaque resource request
-type opaqueIntegerResourceRequest struct {
+type patchOperation struct {
 	Operation string `json:"op"`
 	Path      string `json:"path"`
 	Value     string `json:"value"`
@@ -46,17 +46,13 @@ func NewOpaqueIntegerResourceAdvertiser(name string, value string) (*OpaqueInteg
 
 func (opaque *OpaqueIntegerResourceAdvertiser) toRequestBody(operation string) ([]byte, error) {
 	// body is in form of [{"op": "add", "path": "somepath","value": "somevalue"}]
-	opaqueJson, err := json.Marshal([]opaqueIntegerResourceRequest{
-		opaqueIntegerResourceRequest{
+	return json.Marshal([]patchOperation{
+		patchOperation{
 			Operation: operation,
 			Path:      opaque.generateOpaqueResourcePath(),
 			Value:     opaque.Value,
 		},
 	})
-	if err != nil {
-		return nil, err
-	}
-	return opaqueJson, nil
 }
 
 // TODO: check if kubelet is overriding hostname and return it instead
@@ -74,19 +70,19 @@ func (opaque *OpaqueIntegerResourceAdvertiser) generateOpaqueResourceUrl() strin
 	return fmt.Sprintf("%s/api/v1/nodes/%s/status", opaque.Config.Host, opaque.Node)
 }
 
+// Getting config for accesing apiserver, assuming pod ir run within the cluster
 func getClientConfig() (*restclient.Config, error) {
 	return restclient.InClusterConfig()
 }
 
 // prepare PATCH request for adding/removing opaque resources
 func prepareRequest(body []byte, url string) (*http.Request, error) {
-	req, err := http.NewRequest(http.MethodPatch, url, bytes.NewBuffer(body))
-	if err != nil {
-		return nil, err
-	}
+	return http.NewRequest(http.MethodPatch, url, bytes.NewBuffer(body))
+}
 
+//Setting application/json-patch+json header
+func setPatchHeader(req *http.Request) {
 	req.Header.Set("Content-Type", "application/json-patch+json")
-	return req, nil
 }
 
 func (opaque *OpaqueIntegerResourceAdvertiser) createHttpClient() (*http.Client, error) {
@@ -117,10 +113,11 @@ func (opaque *OpaqueIntegerResourceAdvertiser) makeRequest(operation string) err
 	}
 
 	req, err := prepareRequest(body, opaque.generateOpaqueResourceUrl())
-
 	if err != nil {
 		return err
 	}
+	// Setting proper header for PATCH request
+	setPatchHeader(req)
 
 	client, err := opaque.createHttpClient()
 	if err != nil {
