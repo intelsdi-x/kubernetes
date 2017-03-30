@@ -1,3 +1,5 @@
+// +build linux
+
 /*
 Copyright 2017 The Kubernetes Authors.
 
@@ -41,6 +43,9 @@ type CPUTopology struct {
 }
 
 func (c *CPUTopology) GetNumSockets() int {
+	if len(c.CPU) == 0 {
+		return 0
+	}
 	socketCounter := 0
 	for _, cpu := range c.CPU {
 		if cpu.SocketID > socketCounter {
