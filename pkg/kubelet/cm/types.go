@@ -31,7 +31,8 @@ type ResourceConfig struct {
 	CpuQuota *int64
 	// CPU quota period.
 	CpuPeriod *int64
-	// CPU sets. Which cpu to use
+	// CPU sets.
+	// Link to CpusetCpus format: http://man7.org/linux/man-pages/man7/cpuset.7.html#FORMATS
 	CpusetCpus *string
 }
 
