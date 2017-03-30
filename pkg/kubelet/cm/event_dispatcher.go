@@ -24,11 +24,11 @@ import (
 	"sync"
 
 	"github.com/golang/glog"
+	"github.com/pborman/uuid"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
-	"k8s.io/kubernetes/pkg/api"
+	"k8s.io/kubernetes/pkg/api/v1"
 	"k8s.io/kubernetes/pkg/kubelet/api/v1alpha1/lifecycle"
-	"k8s.io/kubernetes/pkg/util/uuid"
 )
 
 // EventDispatcher manages a set of registered lifecycle event handlers and
@@ -36,11 +36,11 @@ import (
 type EventDispatcher interface {
 	// PreStartPod is invoked after the pod sandbox is created but before any
 	// of a pod's containers are started.
-	PreStartPod(pod *api.Pod, cgroupPath string) error
+	PreStartPod(pod *v1.Pod, cgroupPath string) error
 
 	// PostStopPod is invoked after all of a pod's containers have permanently
 	// stopped running, but before the pod sandbox is destroyed.
-	PostStopPod(pod *api.Pod, cgroupPath string) error
+	PostStopPod(pod *v1.Pod, cgroupPath string) error
 
 	// Start starts the dispatcher. After the dispatcher is started , handlers
 	// can register themselves to receive lifecycle events.
@@ -76,7 +76,7 @@ func newEventDispatcher() *eventDispatcher {
 	return dispatcher
 }
 
-func (ed *eventDispatcher) dispatchEvent(pod *api.Pod, cgroupPath string, kind lifecycle.Event_Kind) error {
+func (ed *eventDispatcher) dispatchEvent(pod *v1.Pod, cgroupPath string, kind lifecycle.Event_Kind) error {
 	jsonPod, err := json.Marshal(pod)
 	if err != nil {
 		return err
@@ -119,11 +119,11 @@ func (ed *eventDispatcher) dispatchEvent(pod *api.Pod, cgroupPath string, kind l
 	return nil
 }
 
-func (ed *eventDispatcher) PreStartPod(pod *api.Pod, cgroupPath string) error {
+func (ed *eventDispatcher) PreStartPod(pod *v1.Pod, cgroupPath string) error {
 	return ed.dispatchEvent(pod, cgroupPath, lifecycle.Event_POD_PRE_START)
 }
 
-func (ed *eventDispatcher) PostStopPod(pod *api.Pod, cgroupPath string) error {
+func (ed *eventDispatcher) PostStopPod(pod *v1.Pod, cgroupPath string) error {
 	return ed.dispatchEvent(pod, cgroupPath, lifecycle.Event_POD_POST_STOP)
 }
 
@@ -165,7 +165,7 @@ func (ed *eventDispatcher) Register(ctx context.Context, request *lifecycle.Regi
 	h := &registeredHandler{
 		name:          request.Name,
 		socketAddress: request.SocketAddress,
-		token:         string(uuid.NewUUID()),
+		token:         uuid.NewUUID().String(),
 	}
 
 	glog.Infof("attempting to register event handler [%s]", h.name)
