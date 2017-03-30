@@ -56,7 +56,7 @@ message Event {
 message EventReply {
   string error = 1;
   CgroupInfo cgroup_info = 2;
-  CgroupResource cgroup_resource = 3;
+  repeated CgroupResource cgroup_resource = 3;
 }
 
 message CgroupInfo {

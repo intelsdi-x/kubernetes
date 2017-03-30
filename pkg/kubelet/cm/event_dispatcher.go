@@ -23,6 +23,7 @@ import (
 	"sync"
 
 	"github.com/golang/glog"
+	proto "github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"k8s.io/kubernetes/pkg/api"
@@ -36,15 +37,18 @@ import (
 type EventDispatcher interface {
 	// PreStartPod is invoked after the pod sandbox is created but before any
 	// of a pod's containers are started.
-	PreStartPod(pod *api.Pod, cgroupPath string) ([]*lifecycle.EventReply, error)
+	PreStartPod(pod *api.Pod, cgroupPath string) (*lifecycle.EventReply, error)
 
 	// PostStopPod is invoked after all of a pod's containers have permanently
 	// stopped running, but before the pod sandbox is destroyed.
-	PostStopPod(pod *api.Pod, cgroupPath string) ([]*lifecycle.EventReply, error)
+	PostStopPod(pod *api.Pod, cgroupPath string) (*lifecycle.EventReply, error)
 
 	// Start starts the dispatcher. After the dispatcher is started , handlers
 	// can register themselves to receive lifecycle events.
 	Start(socketAddress string)
+
+	// Retrieving information about CgroupResources from replies
+	ResourceConfigFromReplies(reply *lifecycle.EventReply, resources *ResourceConfig) *ResourceConfig
 }
 
 // Represents a registered event handler
@@ -76,7 +80,7 @@ func newEventDispatcher() *eventDispatcher {
 	return dispatcher
 }
 
-func (ed *eventDispatcher) dispatchEvent(pod *api.Pod, cgroupPath string, kind lifecycle.Event_Kind) ([]*lifecycle.EventReply, error) {
+func (ed *eventDispatcher) dispatchEvent(pod *api.Pod, cgroupPath string, kind lifecycle.Event_Kind) (*lifecycle.EventReply, error) {
 	jsonPod, err := json.Marshal(pod)
 	if err != nil {
 		return nil, err
@@ -91,8 +95,7 @@ func (ed *eventDispatcher) dispatchEvent(pod *api.Pod, cgroupPath string, kind l
 		Pod: jsonPod,
 	}
 
-	replies := []*lifecycle.EventReply{}
-
+	mergedReplies := &lifecycle.EventReply{}
 	var errlist []error
 	// TODO(CD): Re-evaluate nondeterministic delegation order arising
 	//           from Go map iteration.
@@ -115,18 +118,17 @@ func (ed *eventDispatcher) dispatchEvent(pod *api.Pod, cgroupPath string, kind l
 		if err != nil {
 			errlist = append(errlist, err)
 		}
-		replies = append(replies, reply)
+		proto.Merge(mergedReplies, reply)
 
 	}
-
-	return replies, utilerrors.NewAggregate(errlist)
+	return mergedReplies, utilerrors.NewAggregate(errlist)
 }
 
-func (ed *eventDispatcher) PreStartPod(pod *api.Pod, cgroupPath string) ([]*lifecycle.EventReply, error) {
+func (ed *eventDispatcher) PreStartPod(pod *api.Pod, cgroupPath string) (*lifecycle.EventReply, error) {
 	return ed.dispatchEvent(pod, cgroupPath, lifecycle.Event_POD_PRE_START)
 }
 
-func (ed *eventDispatcher) PostStopPod(pod *api.Pod, cgroupPath string) ([]*lifecycle.EventReply, error) {
+func (ed *eventDispatcher) PostStopPod(pod *api.Pod, cgroupPath string) (*lifecycle.EventReply, error) {
 	return ed.dispatchEvent(pod, cgroupPath, lifecycle.Event_POD_POST_STOP)
 }
 
@@ -204,6 +206,16 @@ func (ed *eventDispatcher) Unregister(ctx context.Context, request *lifecycle.Un
 	}
 	delete(ed.handlers, request.Name)
 	return &lifecycle.UnregisterReply{}, nil
+}
+
+func (ed *eventDispatcher) ResourceConfigFromReplies(reply *lifecycle.EventReply, resources *ResourceConfig) *ResourceConfig {
+	updatedResources := resources
+	for _, cgroupResource := range reply.CgroupResource {
+		if cgroupResource.CgroupSubsystem == lifecycle.CgroupResource_CPUSET_CPUS {
+			updatedResources.CpusetCpus = &cgroupResource.Value
+		}
+	}
+	return updatedResources
 }
 
 func (ed *eventDispatcher) handler(name string) *registeredHandler {
