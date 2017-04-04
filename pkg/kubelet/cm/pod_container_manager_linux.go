@@ -183,12 +183,11 @@ func (m *podContainerManagerImpl) Destroy(podCgroup CgroupName) error {
 		Name:               podCgroup,
 		ResourceParameters: &ResourceConfig{},
 	}
-	// Invoke postStopHook
+	// Invoke pod post-stop lifecycle hook.
 	if err := m.eventDispatcher.PostStopPod(string(podCgroup)); err != nil {
 		return fmt.Errorf("Failed to execute postStop Hook for %v : %v", podCgroup, err)
 	}
 
-	// TODO(CD): Invoke pod post-stop lifecycle hook.
 	if err := m.cgroupManager.Destroy(containerConfig); err != nil {
 		return fmt.Errorf("failed to delete cgroup paths for %v : %v", podCgroup, err)
 	}
