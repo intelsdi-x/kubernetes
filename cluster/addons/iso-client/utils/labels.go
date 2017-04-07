@@ -37,7 +37,7 @@ func applyLabelChange(isolatorName string, add bool) error {
 
 	labels := node.GetLabels()
 	if add {
-		labels[isolatorName] = "enabled"
+		labels[isolatorName] = ""
 	} else {
 		delete(labels, isolatorName)
 	}
