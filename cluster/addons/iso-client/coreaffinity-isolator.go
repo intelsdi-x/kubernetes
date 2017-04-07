@@ -12,6 +12,7 @@ import (
 	aff "k8s.io/kubernetes/cluster/addons/iso-client/coreaffinity"
 	"k8s.io/kubernetes/cluster/addons/iso-client/discovery"
 	opaq "k8s.io/kubernetes/cluster/addons/iso-client/opaque"
+	"k8s.io/kubernetes/cluster/addons/iso-client/utils"
 	"k8s.io/kubernetes/pkg/kubelet/api/v1alpha1/lifecycle"
 )
 
@@ -43,6 +44,11 @@ func shutdownIsolator(client *aff.EventDispatcherClient, opaque *opaq.OpaqueInte
 	glog.Infof("Removing opque integer resources %q from node %s", opaque.Name, opaque.Node)
 	if err := opaque.RemoveOpaqueResource(); err != nil {
 		glog.Fatalf("Failed to remove opaque resources: %v", err)
+	}
+
+	glog.Info("Removing label from node")
+	if err := utils.UnsetLabel(name); err != nil {
+		glog.Fatalf("cannot unset label from node: %q", err)
 	}
 
 	glog.Infof("%s has been unregistered", name)
@@ -78,6 +84,12 @@ func main() {
 		glog.Errorf("Cannot register isolator: %v", err)
 		shutdownIsolator(nil, opaque)
 	}
+
+	glog.Infof("Mark node that isolator %q is available", name)
+	if err := utils.SetLabel(name); err != nil {
+		glog.Errorf("cannot mark node: %q", err.Error())
+	}
+
 	wg.Add(1)
 	go server.Serve(wg)
 
