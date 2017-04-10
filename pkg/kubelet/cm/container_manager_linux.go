@@ -39,6 +39,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/kubernetes/pkg/api/v1"
+	"k8s.io/kubernetes/pkg/client/clientset_generated/clientset"
 	"k8s.io/kubernetes/pkg/kubelet/cadvisor"
 	cmutil "k8s.io/kubernetes/pkg/kubelet/cm/util"
 	"k8s.io/kubernetes/pkg/kubelet/qos"
@@ -117,6 +118,8 @@ type containerManagerImpl struct {
 	recorder record.EventRecorder
 	// Interface for QoS cgroup management
 	qosContainerManager QOSContainerManager
+
+	client *clientset.Clientset
 }
 
 type features struct {
@@ -179,7 +182,7 @@ func validateSystemRequirements(mountUtil mount.Interface) (features, error) {
 // TODO(vmarmol): Add limits to the system containers.
 // Takes the absolute name of the specified containers.
 // Empty container name disables use of the specified container.
-func NewContainerManager(mountUtil mount.Interface, cadvisorInterface cadvisor.Interface, nodeConfig NodeConfig, failSwapOn bool, recorder record.EventRecorder) (ContainerManager, error) {
+func NewContainerManager(mountUtil mount.Interface, cadvisorInterface cadvisor.Interface, nodeConfig NodeConfig, failSwapOn bool, recorder record.EventRecorder, client *clientset.Clientset) (ContainerManager, error) {
 	subsystems, err := GetCgroupSubsystems()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get mounted cgroup subsystems: %v", err)
@@ -263,6 +266,7 @@ func NewContainerManager(mountUtil mount.Interface, cadvisorInterface cadvisor.I
 		cgroupRoot:          cgroupRoot,
 		recorder:            recorder,
 		qosContainerManager: qosContainerManager,
+		client:              client,
 	}, nil
 }
 
@@ -271,7 +275,7 @@ func NewContainerManager(mountUtil mount.Interface, cadvisorInterface cadvisor.I
 // otherwise it returns a no-op manager which essentially does nothing
 func (cm *containerManagerImpl) NewPodContainerManager() PodContainerManager {
 	if cm.NodeConfig.CgroupsPerQOS {
-		eventDispatcher := newEventDispatcher()
+		eventDispatcher := newEventDispatcher(cm.client)
 
 		return &podContainerManagerImpl{
 			qosContainersInfo: cm.GetQOSContainersInfo(),

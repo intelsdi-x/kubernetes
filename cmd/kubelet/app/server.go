@@ -382,6 +382,11 @@ func run(s *options.KubeletServer, kubeDeps *kubelet.KubeletDeps) (err error) {
 		return err
 	}
 
+	kubeClient, err := getKubeClient(s)
+	if err != nil {
+		return err
+	}
+
 	// Register current configuration with /configz endpoint
 	cfgz, cfgzErr := initConfigz(&s.KubeletConfiguration)
 	if utilfeature.DefaultFeatureGate.Enabled(features.DynamicKubeletConfig) {
@@ -555,7 +560,8 @@ func run(s *options.KubeletServer, kubeDeps *kubelet.KubeletDeps) (err error) {
 				ExperimentalQOSReserved: *experimentalQOSReserved,
 			},
 			s.ExperimentalFailSwapOn,
-			kubeDeps.Recorder)
+			kubeDeps.Recorder,
+			kubeClient)
 
 		if err != nil {
 			return err

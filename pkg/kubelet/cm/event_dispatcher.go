@@ -20,14 +20,17 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"os"
 	"sync"
 
 	"github.com/golang/glog"
 	proto "github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
+	"k8s.io/apimachinery/pkg/types"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/kubernetes/pkg/api/v1"
+	"k8s.io/kubernetes/pkg/client/clientset_generated/clientset"
 	"k8s.io/kubernetes/pkg/kubelet/api/v1alpha1/lifecycle"
 )
 
@@ -61,15 +64,17 @@ type eventDispatcher struct {
 	sync.Mutex
 	started   bool
 	isolators map[string]*registeredIsolator
+	client    *clientset.Clientset
 }
 
 var dispatcher *eventDispatcher
 var once sync.Once
 
-func newEventDispatcher() *eventDispatcher {
+func newEventDispatcher(client *clientset.Clientset) *eventDispatcher {
 	once.Do(func() {
 		dispatcher = &eventDispatcher{
 			isolators: map[string]*registeredIsolator{},
+			client:    client,
 		}
 		dispatcher.Start(":5433") // "life" on a North American keypad
 	})
@@ -183,13 +188,33 @@ func (ed *eventDispatcher) Register(ctx context.Context, request *lifecycle.Regi
 		glog.Infof("re-registering isolator [%s]", isolator.name)
 	}
 
-	// Save registeredIsolator
-	ed.isolators[isolator.name] = isolator
+	glog.Info("Setting new label")
+	hostname, err := os.Hostname()
+	if err != nil {
+		return nil, err
+	}
+	patch := []byte(fmt.Sprintf(`[{"op": "add", "path": "/metadata/labels/%s", "value": ""}]`, request.Name))
+	err = ed.client.Core().RESTClient().Patch(types.JSONPatchType).Resource("nodes").Name(hostname).Body(patch).Do().Error()
+	if err != nil {
+		glog.Infof("Cannot patch %q", err.Error())
+		return nil, err
+	}
 
 	return &lifecycle.RegisterReply{}, nil
 }
 
 func (ed *eventDispatcher) Unregister(ctx context.Context, request *lifecycle.UnregisterRequest) (*lifecycle.UnregisterReply, error) {
+	glog.Info("Removing label")
+	hostname, err := os.Hostname()
+	if err != nil {
+		return nil, err
+	}
+	patch := []byte(fmt.Sprintf(`[{"op": "remove", "path": "/metadata/labels/%s"}]`, request.Name))
+	err = ed.client.Core().RESTClient().Patch(types.JSONPatchType).Resource("nodes").Name(hostname).Body(patch).Do().Error()
+	if err != nil {
+		glog.Infof("Cannot patch %q", err.Error())
+		return nil, err
+	}
 	reg := ed.isolator(request.Name)
 	if reg == nil {
 		msg := fmt.Sprintf("unregistration failed: no isolator named [%s] is currently registered.", request.Name)
