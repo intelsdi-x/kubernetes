@@ -20,19 +20,28 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
-	"os"
+	"strings"
 	"sync"
 
 	"github.com/golang/glog"
 	proto "github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
-	"k8s.io/apimachinery/pkg/types"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/kubernetes/pkg/api/v1"
-	"k8s.io/kubernetes/pkg/client/clientset_generated/clientset"
 	"k8s.io/kubernetes/pkg/kubelet/api/v1alpha1/lifecycle"
 )
+
+type EventDispatcherEventType int
+
+const (
+	UPDATE_ISOLATOR_LIST EventDispatcherEventType = iota
+)
+
+type EventDispatcherEvent struct {
+	Type EventDispatcherEventType
+	Body string
+}
 
 // EventDispatcher manages a set of registered isolators and dispatches
 // lifecycle events to them.
@@ -50,6 +59,8 @@ type EventDispatcher interface {
 
 	// Retrieving information about isolation controls from replies
 	ResourceConfigFromReplies(reply *lifecycle.EventReply, resources *ResourceConfig) *ResourceConfig
+
+	GetEventChannelNotificator() chan EventDispatcherEvent
 }
 
 // Represents a registered isolator
@@ -62,23 +73,27 @@ type registeredIsolator struct {
 
 type eventDispatcher struct {
 	sync.Mutex
-	started   bool
-	isolators map[string]*registeredIsolator
-	client    *clientset.Clientset
+	started       bool
+	isolators     map[string]*registeredIsolator
+	notifyChannel chan EventDispatcherEvent
 }
 
 var dispatcher *eventDispatcher
 var once sync.Once
 
-func newEventDispatcher(client *clientset.Clientset) *eventDispatcher {
+func newEventDispatcher() *eventDispatcher {
 	once.Do(func() {
 		dispatcher = &eventDispatcher{
-			isolators: map[string]*registeredIsolator{},
-			client:    client,
+			isolators:     map[string]*registeredIsolator{},
+			notifyChannel: make(chan EventDispatcherEvent),
 		}
 		dispatcher.Start(":5433") // "life" on a North American keypad
 	})
 	return dispatcher
+}
+
+func (ed *eventDispatcher) GetEventChannelNotificator() chan EventDispatcherEvent {
+	return ed.notifyChannel
 }
 
 func (ed *eventDispatcher) dispatchEvent(ev *lifecycle.Event) (*lifecycle.EventReply, error) {
@@ -109,6 +124,17 @@ func (ed *eventDispatcher) dispatchEvent(ev *lifecycle.Event) (*lifecycle.EventR
 
 	}
 	return mergedReplies, utilerrors.NewAggregate(errlist)
+}
+
+func (ed *eventDispatcher) updateIsolators() {
+	var isolators []string
+	for isolator := range ed.isolators {
+		isolators = append(isolators, isolator)
+	}
+	ed.notifyChannel <- EventDispatcherEvent{
+		Type: UPDATE_ISOLATOR_LIST,
+		Body: strings.Join(isolators, ","),
+	}
 }
 
 func (ed *eventDispatcher) PreStartPod(pod *v1.Pod, cgroupPath string) (*lifecycle.EventReply, error) {
@@ -187,34 +213,14 @@ func (ed *eventDispatcher) Register(ctx context.Context, request *lifecycle.Regi
 	if reg != nil {
 		glog.Infof("re-registering isolator [%s]", isolator.name)
 	}
-
-	glog.Info("Setting new label")
-	hostname, err := os.Hostname()
-	if err != nil {
-		return nil, err
-	}
-	patch := []byte(fmt.Sprintf(`[{"op": "add", "path": "/metadata/labels/%s", "value": ""}]`, request.Name))
-	err = ed.client.Core().RESTClient().Patch(types.JSONPatchType).Resource("nodes").Name(hostname).Body(patch).Do().Error()
-	if err != nil {
-		glog.Infof("Cannot patch %q", err.Error())
-		return nil, err
-	}
+	// Save registeredIsolator
+	ed.isolators[isolator.name] = isolator
+	ed.updateIsolators()
 
 	return &lifecycle.RegisterReply{}, nil
 }
 
 func (ed *eventDispatcher) Unregister(ctx context.Context, request *lifecycle.UnregisterRequest) (*lifecycle.UnregisterReply, error) {
-	glog.Info("Removing label")
-	hostname, err := os.Hostname()
-	if err != nil {
-		return nil, err
-	}
-	patch := []byte(fmt.Sprintf(`[{"op": "remove", "path": "/metadata/labels/%s"}]`, request.Name))
-	err = ed.client.Core().RESTClient().Patch(types.JSONPatchType).Resource("nodes").Name(hostname).Body(patch).Do().Error()
-	if err != nil {
-		glog.Infof("Cannot patch %q", err.Error())
-		return nil, err
-	}
 	reg := ed.isolator(request.Name)
 	if reg == nil {
 		msg := fmt.Sprintf("unregistration failed: no isolator named [%s] is currently registered.", request.Name)
@@ -222,6 +228,7 @@ func (ed *eventDispatcher) Unregister(ctx context.Context, request *lifecycle.Un
 		return &lifecycle.UnregisterReply{Error: msg}, nil
 	}
 	delete(ed.isolators, request.Name)
+	ed.updateIsolators()
 	return &lifecycle.UnregisterReply{}, nil
 }
 

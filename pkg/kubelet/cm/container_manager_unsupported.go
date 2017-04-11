@@ -68,6 +68,6 @@ func (cm *unsupportedContainerManager) NewPodContainerManager() PodContainerMana
 	return &unsupportedPodContainerManager{}
 }
 
-func NewContainerManager(_ mount.Interface, _ cadvisor.Interface, _ NodeConfig, failSwapOn bool, recorder record.EventRecorder, _ *Clientset) (ContainerManager, error) {
+func NewContainerManager(_ mount.Interface, _ cadvisor.Interface, _ NodeConfig, failSwapOn bool, recorder record.EventRecorder) (ContainerManager, error) {
 	return &unsupportedContainerManager{}, nil
 }

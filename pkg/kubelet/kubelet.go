@@ -1125,6 +1125,8 @@ type Kubelet struct {
 	// dockerLegacyService contains some legacy methods for backward compatibility.
 	// It should be set only when docker is using non json-file logging driver.
 	dockerLegacyService dockershim.DockerLegacyService
+
+	eventDispacherEventChannel chan cm.EventDispatcherEvent
 }
 
 // setupDataDirs creates:
@@ -1523,6 +1525,9 @@ func (kl *Kubelet) syncPod(o syncPodOptions) error {
 		}
 	}
 
+	// TODO(squall0): Write down documentation here
+	kl.eventDispacherEventChannel = pcm.GetEventDispatcherChan()
+
 	// Create Mirror Pod for Static Pod if it doesn't already exist
 	if kubepod.IsStaticPod(pod) {
 		podFullName := kubecontainer.GetPodFullName(pod)
@@ -1856,6 +1861,24 @@ func (kl *Kubelet) syncLoopIteration(configCh <-chan kubetypes.PodUpdate, handle
 		if e.Type == pleg.ContainerDied {
 			if containerID, ok := e.Data.(string); ok {
 				kl.cleanUpContainersInPod(e.ID, containerID)
+			}
+		}
+	case eventDispatcherEvent := <-kl.eventDispacherEventChannel:
+		switch eventDispatcherEvent.Type {
+		case cm.UPDATE_ISOLATOR_LIST:
+			node, err := kl.GetNode()
+			if err != nil {
+				glog.Errorf("cannot achieve node: %q", err.Error())
+				break
+			}
+			if len(eventDispatcherEvent.Body) > 0 {
+				node.ObjectMeta.Labels["external-isolators"] = eventDispatcherEvent.Body
+			} else {
+				delete(node.ObjectMeta.Labels, "external-isolators")
+			}
+			_, err = kl.kubeClient.Core().Nodes().Update(node)
+			if err != nil {
+				glog.Errorf("cannot update node information: %q", err.Error())
 			}
 		}
 	case <-syncCh:
