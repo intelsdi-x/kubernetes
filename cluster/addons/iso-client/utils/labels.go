@@ -16,23 +16,23 @@ func generateIsolatorName(name string) string {
 func applyLabelChange(isolatorName string, add bool) error {
 	config, err := rest.InClusterConfig()
 	if err != nil {
-		return fmt.Errorf("cannot get in-cluster config: %q", err)
+		return fmt.Errorf("failed to get in-cluster config: %q", err)
 	}
 
 	nodename, err := os.Hostname()
 	if err != nil {
-		return fmt.Errorf("cannot gather hostname: %q", err)
+		return fmt.Errorf("failed to read hostname: %q", err)
 	}
 
 	clientset, err := kubeapi.NewForConfig(config)
 	if err != nil {
-		return fmt.Errorf("cannot achieve client instance for Kubernetes: %s", err)
+		return fmt.Errorf("failed to establish connaction with apiserver: %q", err)
 	}
 
 	client := clientset.CoreV1()
 	node, err := client.Nodes().Get(nodename, metav1.GetOptions{})
 	if err != nil {
-		return fmt.Errorf("cannot get node %q: %q", nodename, err)
+		return fmt.Errorf("failed to get node %q: %q", nodename, err)
 	}
 
 	labels := node.GetLabels()

@@ -32,7 +32,7 @@ func handleSIGTERM(sigterm chan os.Signal, client *aff.EventDispatcherClient, op
 
 func shutdownIsolator(client *aff.EventDispatcherClient, opaque *opaq.OpaqueIntegerResourceAdvertiser) {
 	unregisterRequest := &lifecycle.UnregisterRequest{
-		Name:  client.Name,
+		Name: client.Name,
 	}
 
 	glog.Infof("Unregistering custom-isolator: %s", name)
@@ -48,7 +48,7 @@ func shutdownIsolator(client *aff.EventDispatcherClient, opaque *opaq.OpaqueInte
 
 	glog.Info("Removing label from node")
 	if err := utils.UnsetLabel(name); err != nil {
-		glog.Fatalf("cannot unset label from node: %q", err)
+		glog.Fatalf("Failad to unset label from node: %q", err)
 	}
 
 	glog.Infof("%s has been unregistered", name)
@@ -85,9 +85,9 @@ func main() {
 		shutdownIsolator(nil, opaque)
 	}
 
-	glog.Infof("Mark node that isolator %q is available", name)
+	glog.Infof("Label node that isolator %q is available", name)
 	if err := utils.SetLabel(name); err != nil {
-		glog.Errorf("cannot mark node: %q", err.Error())
+		glog.Errorf("Failed to label node: %q", err.Error())
 	}
 
 	wg.Add(1)
