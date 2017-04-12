@@ -68,7 +68,9 @@ message CgroupInfo {
 message IsolationControl {
   enum Kind {
     CGROUP_CPUSET_CPUS = 0;
+    ENVIRONMENT_VARIABLES = 1;
   };
   Kind kind = 1;
   string value = 2;
+  map<string, string> map_value = 3;
 }
