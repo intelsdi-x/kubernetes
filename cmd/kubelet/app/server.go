@@ -319,8 +319,13 @@ func initConfigz(kc *componentconfig.KubeletConfiguration) (*configz.Config, err
 
 // validateConfig validates configuration of Kubelet and returns an error is the input configuration is invalid.
 func validateConfig(s *options.KubeletServer) error {
-	if !s.CgroupsPerQOS && len(s.EnforceNodeAllocatable) > 0 {
-		return fmt.Errorf("Node Allocatable enforcement is not supported unless Cgroups Per QOS feature is turned on")
+	if !s.CgroupsPerQOS {
+		if len(s.EnforceNodeAllocatable) > 0 {
+			return fmt.Errorf("Node Allocatable enforcement is not supported unless Cgroups Per QOS feature is turned on")
+		}
+		if s.ExtendedIsolation {
+			return fmt.Errorf("Extended Isolation is not supported unless Cgroups Per QOS feature is turned on")
+		}
 	}
 	if s.SystemCgroups != "" && s.CgroupRoot == "" {
 		return fmt.Errorf("invalid configuration: system container was specified and cgroup root was not specified")
@@ -542,6 +547,7 @@ func run(s *options.KubeletServer, kubeDeps *kubelet.KubeletDeps) (err error) {
 				CgroupsPerQOS:         s.CgroupsPerQOS,
 				CgroupRoot:            s.CgroupRoot,
 				CgroupDriver:          s.CgroupDriver,
+				ExtendedIsolation:     s.ExtendedIsolation,
 				ProtectKernelDefaults: s.ProtectKernelDefaults,
 				EnableCRI:             s.EnableCRI,
 				NodeAllocatableConfig: cm.NodeAllocatableConfig{

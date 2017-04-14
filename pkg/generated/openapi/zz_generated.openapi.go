@@ -13605,6 +13605,13 @@ func GetOpenAPIDefinitions(ref openapi.ReferenceCallback) map[string]openapi.Ope
 								Format:      "",
 							},
 						},
+						"extendedIsolation": {
+							SchemaProps: spec.SchemaProps{
+								Description: "Enables extended isolation",
+								Type:        []string{"boolean"},
+								Format:      "",
+							},
+						},
 						"cgroupDriver": {
 							SchemaProps: spec.SchemaProps{
 								Description: "driver that the kubelet uses to manipulate cgroups on the host (cgroupfs or systemd)",
