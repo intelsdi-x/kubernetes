@@ -73,6 +73,7 @@ type NodeConfig struct {
 	CgroupsPerQOS         bool
 	CgroupRoot            string
 	CgroupDriver          string
+	ExtendedIsolation     bool
 	ProtectKernelDefaults bool
 	EnableCRI             bool
 	NodeAllocatableConfig

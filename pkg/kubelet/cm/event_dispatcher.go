@@ -94,16 +94,25 @@ type eventDispatcher struct {
 	eventChannel chan EventDispatcherEvent
 }
 
+var enabled bool
 var dispatcher *eventDispatcher
 var once sync.Once
 
+func EnableEventDispatcher() {
+	enabled = true
+}
+
 func GetEventDispatcherSingleton() *eventDispatcher {
 	once.Do(func() {
-		dispatcher = &eventDispatcher{
-			isolators:    map[string]*registeredIsolator{},
-			eventChannel: make(chan EventDispatcherEvent),
+		if enabled {
+			dispatcher = &eventDispatcher{
+				isolators:    map[string]*registeredIsolator{},
+				eventChannel: make(chan EventDispatcherEvent),
+			}
+			dispatcher.Start(":5433") // "life" on a North American keypad
+		} else {
+			// TODO: construct noop dispatcher
 		}
-		dispatcher.Start(":5433") // "life" on a North American keypad
 	})
 	return dispatcher
 }
