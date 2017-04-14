@@ -35,7 +35,7 @@ import (
 type EventDispatcherEventType int
 
 const (
-	UPDATE_ISOLATOR_LIST EventDispatcherEventType = iota
+	ISOLATOR_LIST_CHANGED EventDispatcherEventType = iota
 )
 
 type EventDispatcherEvent struct {
@@ -60,7 +60,8 @@ type EventDispatcher interface {
 	// Retrieving information about isolation controls from replies
 	ResourceConfigFromReplies(reply *lifecycle.EventReply, resources *ResourceConfig) *ResourceConfig
 
-	GetEventChannelNotificator() chan EventDispatcherEvent
+	// Get communication channel.
+	GetEventChannel() chan EventDispatcherEvent
 }
 
 // Represents a registered isolator
@@ -73,9 +74,9 @@ type registeredIsolator struct {
 
 type eventDispatcher struct {
 	sync.Mutex
-	started       bool
-	isolators     map[string]*registeredIsolator
-	notifyChannel chan EventDispatcherEvent
+	started      bool
+	isolators    map[string]*registeredIsolator
+	eventChannel chan EventDispatcherEvent
 }
 
 var dispatcher *eventDispatcher
@@ -84,16 +85,17 @@ var once sync.Once
 func newEventDispatcher() *eventDispatcher {
 	once.Do(func() {
 		dispatcher = &eventDispatcher{
-			isolators:     map[string]*registeredIsolator{},
-			notifyChannel: make(chan EventDispatcherEvent),
+			isolators:    map[string]*registeredIsolator{},
+			eventChannel: make(chan EventDispatcherEvent),
 		}
 		dispatcher.Start(":5433") // "life" on a North American keypad
 	})
 	return dispatcher
 }
 
-func (ed *eventDispatcher) GetEventChannelNotificator() chan EventDispatcherEvent {
-	return ed.notifyChannel
+func (ed *eventDispatcher) GetEventChannel() chan EventDispatcherEvent {
+	glog.Info("GET CHANNEL")
+	return ed.eventChannel
 }
 
 func (ed *eventDispatcher) dispatchEvent(ev *lifecycle.Event) (*lifecycle.EventReply, error) {
@@ -127,13 +129,15 @@ func (ed *eventDispatcher) dispatchEvent(ev *lifecycle.Event) (*lifecycle.EventR
 }
 
 func (ed *eventDispatcher) updateIsolators() {
-	var isolators []string
+	isolators := make([]string, len(ed.isolators))
+	idx := 0
 	for isolator := range ed.isolators {
-		isolators = append(isolators, isolator)
+		isolators[idx] = isolator
+		idx += 1
 	}
-	ed.notifyChannel <- EventDispatcherEvent{
-		Type: UPDATE_ISOLATOR_LIST,
-		Body: strings.Join(isolators, ","),
+	ed.eventChannel <- EventDispatcherEvent{
+		Type: ISOLATOR_LIST_CHANGED,
+		Body: strings.Join(isolators, "."),
 	}
 }
 

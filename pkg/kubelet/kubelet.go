@@ -1867,20 +1867,20 @@ func (kl *Kubelet) syncLoopIteration(configCh <-chan kubetypes.PodUpdate, handle
 		}
 	case eventDispatcherEvent := <-kl.eventDispacherEventChannel:
 		switch eventDispatcherEvent.Type {
-		case cm.UPDATE_ISOLATOR_LIST:
-			node, err := kl.GetNode()
+		case cm.ISOLATOR_LIST_CHANGED:
+			isolatorLabel := "node.alpha.kubernetes.io/registered-isolators"
+			node, err := kl.getNodeAnyWay()
 			if err != nil {
-				glog.Errorf("cannot achieve node: %q", err.Error())
-				break
+				glog.Errorf("update isolator list: unable to get current node: %q", err.Error())
 			}
-			if len(eventDispatcherEvent.Body) > 0 {
-				node.ObjectMeta.Labels["external-isolators"] = eventDispatcherEvent.Body
+			if eventDispatcherEvent.Body != "" {
+				node.ObjectMeta.Labels[isolatorLabel] = eventDispatcherEvent.Body
 			} else {
-				delete(node.ObjectMeta.Labels, "external-isolators")
+				delete(node.ObjectMeta.Labels, isolatorLabel)
 			}
-			_, err = kl.kubeClient.Core().Nodes().Update(node)
+			_, err = kl.kubeClient.CoreV1().Nodes().Update(node)
 			if err != nil {
-				glog.Errorf("cannot update node information: %q", err.Error())
+				glog.Errorf("unable to update list of registered isolators in node: %q", err.Error())
 			}
 		}
 	case <-syncCh:

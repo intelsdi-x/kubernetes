@@ -111,7 +111,7 @@ func (m *podContainerManagerImpl) EnsureExists(pod *v1.Pod) error {
 }
 
 func (m *podContainerManagerImpl) GetEventDispatcherChan() chan EventDispatcherEvent {
-	return m.eventDispatcher.GetEventChannelNotificator()
+	return m.eventDispatcher.GetEventChannel()
 }
 
 // GetPodContainerName returns the CgroupName identifer, and its literal cgroupfs form on the host.
