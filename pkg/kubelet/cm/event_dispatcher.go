@@ -94,7 +94,6 @@ func newEventDispatcher() *eventDispatcher {
 }
 
 func (ed *eventDispatcher) GetEventChannel() chan EventDispatcherEvent {
-	glog.Info("GET CHANNEL")
 	return ed.eventChannel
 }
 
