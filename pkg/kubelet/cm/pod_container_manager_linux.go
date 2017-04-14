@@ -111,6 +111,9 @@ func (m *podContainerManagerImpl) EnsureExists(pod *v1.Pod) error {
 }
 
 func (m *podContainerManagerImpl) GetEventDispatcherChan() chan EventDispatcherEvent {
+	if m.eventDispatcher == nil {
+		return nil
+	}
 	return m.eventDispatcher.GetEventChannel()
 }
 
