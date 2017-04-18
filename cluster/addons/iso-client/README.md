@@ -26,7 +26,7 @@ a kubelet binary can be found here:
 _output/dockerized/bin/linux/amd64/kubelet
 ```
 
-Every node which is supposed to be able to use cgroup-cpuset-cpus isolator has to use this kubelet, additionaly to enable extended pod-level resource isolation kubelet has to be run with two additional flags:
+Every node which is supposed to be able to use cgroup-cpuset-cpus isolator has to use this kubelet, additionaly to enable extended pod-level resource isolation kubelet has to be run with two additional flags (true by default since 1.6):
 
 ```
 --cgroups-per-qos=true --cgroup-root=/
@@ -34,18 +34,10 @@ Every node which is supposed to be able to use cgroup-cpuset-cpus isolator has t
 
 For extended pod-level resources to be easily plugable, kubelet spawns another service called EventDispatcher and custome isolators are registering to it in order to receive IsolationRequests. That is why we suggest to run custom isolators as DaemonSets and orchestrate their placements with node labels and NodeSelectors.
 
-To create a docker image with cgroup-cpuset-cpus isolator execute this script (resulting docker images name is passed as first argument):
+To create a docker image with cgroup-cpuset-cpus isolator run (resulting docker images name is passed as IMAGE_NAME variable):
 
-```
-#!/usr/bin/env bash
-set -e
-
-IMAGE_NAME=${1:-cgroup-cpuset-cpus-isolator}
-
-go build coreaffinity-isolator.go
-
-docker build -t $IMAGE_NAME .
-
+```sh
+IMAGE_NAME=<docker_image_name> make docker
 ```
 
 ### Usage
@@ -76,7 +68,7 @@ pod.alpha.kubernetes.io/opaque-int-resource-cgroup-cpuset-cpus: <number-of-cpus-
 
 To run a pod with specified cpusets, one just have to  modify manifests of existing applications to consume those opaque integer resources, example:
 
-```
+```yaml
 kind: Pod
 apiVersion: v1
 metadata:
@@ -91,5 +83,3 @@ spec:
       requests:
         pod.alpha.kubernetes.io/opaque-int-resource-cgroup-cpuset-cpus: 3
 ```
-
-
