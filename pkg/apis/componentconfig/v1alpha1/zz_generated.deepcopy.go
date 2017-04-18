@@ -205,8 +205,8 @@ func DeepCopy_v1alpha1_KubeletConfiguration(in interface{}, out interface{}, c *
 			*out = new(bool)
 			**out = **in
 		}
-		if in.ExtendedIsolation != nil {
-			in, out := &in.ExtendedIsolation, &out.ExtendedIsolation
+		if in.EnableExtendedIsolation != nil {
+			in, out := &in.EnableExtendedIsolation, &out.EnableExtendedIsolation
 			*out = new(bool)
 			**out = **in
 		}

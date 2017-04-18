@@ -383,7 +383,7 @@ type KubeletConfiguration struct {
 	CgroupsPerQOS *bool `json:"cgroupsPerQOS,omitempty"`
 	// Enables extended isolation
 	// +optional
-	ExtendedIsolation *bool `json:"extendedIsolation,omitempty"`
+	EnableExtendedIsolation *bool `json:"enableExtendedIsolation,omitempty"`
 	// driver that the kubelet uses to manipulate cgroups on the host (cgroupfs or systemd)
 	// +optional
 	CgroupDriver string `json:"cgroupDriver,omitempty"`

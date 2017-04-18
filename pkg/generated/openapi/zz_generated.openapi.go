@@ -13594,7 +13594,7 @@ func GetOpenAPIDefinitions(ref openapi.ReferenceCallback) map[string]openapi.Ope
 								Format:      "",
 							},
 						},
-						"extendedIsolation": {
+						"enableExtendedIsolation": {
 							SchemaProps: spec.SchemaProps{
 								Description: "Enables extended isolation",
 								Type:        []string{"boolean"},

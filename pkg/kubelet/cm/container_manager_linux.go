@@ -272,7 +272,7 @@ func NewContainerManager(mountUtil mount.Interface, cadvisorInterface cadvisor.I
 func (cm *containerManagerImpl) NewPodContainerManager() PodContainerManager {
 	if cm.NodeConfig.CgroupsPerQOS {
 
-		if cm.NodeConfig.ExtendedIsolation {
+		if cm.NodeConfig.EnableExtendedIsolation {
 			EnableEventDispatcher()
 		}
 

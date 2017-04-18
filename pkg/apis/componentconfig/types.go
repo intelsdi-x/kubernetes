@@ -319,8 +319,9 @@ type KubeletConfiguration struct {
 	// +optional
 	CgroupRoot string
 	// Enables extended isolation eventDispatcher
+	// Requires CgroupsPerQOS
 	// +optional
-	ExtendedIsolation bool
+	EnableExtendedIsolation bool
 	// containerRuntime is the container runtime to use.
 	ContainerRuntime string
 	// remoteRuntimeEndpoint is the endpoint of remote runtime service
