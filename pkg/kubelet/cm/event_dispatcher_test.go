@@ -416,11 +416,6 @@ func TestEventDispatcher_ResourceConfigFromReplies(t *testing.T) {
 			resources: &ResourceConfig{},
 			shouldBe:  "3",
 		},
-		{
-			isolators: []*lifecycle.IsolationControl{},
-			resources: &ResourceConfig{},
-			shouldBe:  "",
-		},
 	}
 
 	for _, testCase := range testCases {
