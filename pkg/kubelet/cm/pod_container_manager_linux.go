@@ -91,10 +91,8 @@ func (m *podContainerManagerImpl) EnsureExists(pod *v1.Pod) error {
 		}
 		// Dispatch events to subscribed event handlers, if any.
 		// TODO(CD): Ensure it's ok to do this before calling applyLimits
-		if m.eventDispatcher != nil {
-			if reply, err = m.eventDispatcher.PreStartPod(pod, string(podContainerName)); err != nil {
-				return fmt.Errorf("failed to execute PreStartPod hook for: %v: %v", pod.Name, err)
-			}
+		if reply, err = m.eventDispatcher.PreStartPod(pod, string(podContainerName)); err != nil {
+			return fmt.Errorf("failed to execute PreStartPod hook for: %v: %v", pod.Name, err)
 		}
 	}
 	// retrieve cgroupResources from replies from isolators and apply them on existing CgroupConfig
@@ -113,9 +111,6 @@ func (m *podContainerManagerImpl) EnsureExists(pod *v1.Pod) error {
 }
 
 func (m *podContainerManagerImpl) GetEventDispatcherChan() chan EventDispatcherEvent {
-	if m.eventDispatcher == nil {
-		return nil
-	}
 	return m.eventDispatcher.GetEventChannel()
 }
 
@@ -195,10 +190,8 @@ func (m *podContainerManagerImpl) Destroy(podCgroup CgroupName) error {
 	var errlist []error
 
 	// Invoke pod post-stop lifecycle hook.
-	if m.eventDispatcher != nil {
-		if err := m.eventDispatcher.PostStopPod(string(podCgroup)); err != nil {
-			errlist = append(errlist, fmt.Errorf("Failed to execute postStop Hook for %v : %v", podCgroup, err))
-		}
+	if err := m.eventDispatcher.PostStopPod(string(podCgroup)); err != nil {
+		errlist = append(errlist, fmt.Errorf("Failed to execute postStop Hook for %v : %v", podCgroup, err))
 	}
 	// Make sure cgroup is destroyed even if postStop hook failed
 	if err := m.cgroupManager.Destroy(containerConfig); err != nil {
