@@ -32,6 +32,10 @@ import (
 	"k8s.io/kubernetes/pkg/kubelet/api/v1alpha1/lifecycle"
 )
 
+func getIsolators(eventCh chan EventDispatcherEvent, isolators *EventDispatcherEvent) {
+	*isolators = <-eventCh
+}
+
 func TestEventDispatcher_Register(t *testing.T) {
 	ed := newEventDispatcher()
 	testCases := []struct {
@@ -93,11 +97,24 @@ func TestEventDispatcher_Register(t *testing.T) {
 		},
 	}
 	for _, testCase := range testCases {
+		var events []EventDispatcherEvent
 		ed.isolators = make(map[string]*registeredIsolator)
+
 		for _, req := range testCase.registrationEvents {
+			var registrationEvent EventDispatcherEvent
+			go getIsolators(ed.GetEventChannel(), &registrationEvent)
 			ed.Register(context.Background(), req)
+
+			if registrationEvent.Type != ISOLATOR_LIST_CHANGED {
+				t.Error("Event type is different than expected one")
+			}
+
+			events = append(events, registrationEvent)
 		}
 
+		if len(events) != len(testCase.registrationEvents) {
+			t.Error("Number of events are different than number of registrations")
+		}
 		if len(ed.isolators) != testCase.requestedIsolatorsNumber {
 			t.Errorf("Expected number of isolators (%d) is different than real one (%d)",
 				len(ed.isolators),
@@ -121,69 +138,72 @@ func TestEventDispatcher_Register(t *testing.T) {
 }
 
 func TestEventDispatcher_Unregister(t *testing.T) {
-	ed := newEventDispatcher()
 	testCases := []struct {
-		isolators    []*registeredIsolator
+		isolators    []*lifecycle.RegisterRequest
 		isolatorName string
 	}{
 		{
-			isolators: []*registeredIsolator{
+			isolators: []*lifecycle.RegisterRequest{
 				{
-					name:          "test1",
-					socketAddress: "socket1",
+					Name:          "test1",
+					SocketAddress: "socket1",
 				},
 				{
-					name:          "test2",
-					socketAddress: "socket2",
+					Name:          "test2",
+					SocketAddress: "socket2",
 				},
 			},
 			isolatorName: "test1",
 		},
 		{
-			isolators: []*registeredIsolator{
+			isolators: []*lifecycle.RegisterRequest{
 				{
-					name:          "test1",
-					socketAddress: "socket1",
+					Name:          "test1",
+					SocketAddress: "socket1",
 				},
 				{
-					name:          "test2",
-					socketAddress: "socket2",
+					Name:          "test2",
+					SocketAddress: "socket2",
 				},
 			},
 			isolatorName: "test3",
 		},
 		{
-			isolators: []*registeredIsolator{
+			isolators: []*lifecycle.RegisterRequest{
 				{
-					name:          "test1",
-					socketAddress: "socket1",
+					Name:          "test1",
+					SocketAddress: "socket1",
 				},
 				{
-					name:          "test2",
-					socketAddress: "socket2",
+					Name:          "test2",
+					SocketAddress: "socket2",
 				},
 				{
-					name:          "test2",
-					socketAddress: "socket2",
+					Name:          "test2",
+					SocketAddress: "socket2",
 				},
 				{
-					name:          "test3",
-					socketAddress: "socket3",
+					Name:          "test3",
+					SocketAddress: "socket3",
 				},
 			},
 			isolatorName: "test2",
 		},
 		{
-			isolators:    []*registeredIsolator{},
+			isolators:    []*lifecycle.RegisterRequest{},
 			isolatorName: "test1",
 		},
 	}
 
 	for _, testCase := range testCases {
+		ed := newEventDispatcher()
 		ed.isolators = make(map[string]*registeredIsolator)
 		for _, isolator := range testCase.isolators {
-			ed.isolators[isolator.name] = isolator
+			go getIsolators(ed.GetEventChannel(), &EventDispatcherEvent{})
+			ed.Register(ctx.Background(), isolator)
 		}
+		var event EventDispatcherEvent
+		go getIsolators(ed.GetEventChannel(), &event)
 		ed.Unregister(context.Background(), &lifecycle.UnregisterRequest{Name: testCase.isolatorName})
 		if ed.isolators[testCase.isolatorName] != nil {
 			t.Error("Unregistration failed: expected item to remove is still available")
@@ -384,9 +404,10 @@ func TestEventDispatcher_PostStopPod(t *testing.T) {
 
 func TestEventDispatcher_ResourceConfigFromReplies(t *testing.T) {
 	testCases := []struct {
-		isolators []*lifecycle.IsolationControl
-		resources *ResourceConfig
-		shouldBe  string
+		isolators     []*lifecycle.IsolationControl
+		resources     *ResourceConfig
+		shouldBe      string
+		requestedKind lifecycle.IsolationControl_Kind
 	}{
 		{
 			isolators: []*lifecycle.IsolationControl{
@@ -395,8 +416,9 @@ func TestEventDispatcher_ResourceConfigFromReplies(t *testing.T) {
 					Value: "5",
 				},
 			},
-			resources: &ResourceConfig{},
-			shouldBe:  "5",
+			resources:     &ResourceConfig{},
+			shouldBe:      "5",
+			requestedKind: lifecycle.IsolationControl_CGROUP_CPUSET_CPUS,
 		},
 		{
 			isolators: []*lifecycle.IsolationControl{
@@ -409,12 +431,32 @@ func TestEventDispatcher_ResourceConfigFromReplies(t *testing.T) {
 					Value: "2",
 				},
 				{
-					Kind:  lifecycle.IsolationControl_CGROUP_CPUSET_CPUS,
+					Kind:  lifecycle.IsolationControl_CGROUP_CPUSET_MEMS,
 					Value: "3",
 				},
 			},
-			resources: &ResourceConfig{},
-			shouldBe:  "3",
+			resources:     &ResourceConfig{},
+			shouldBe:      "2",
+			requestedKind: lifecycle.IsolationControl_CGROUP_CPUSET_CPUS,
+		},
+		{
+			isolators: []*lifecycle.IsolationControl{
+				{
+					Kind:  lifecycle.IsolationControl_CGROUP_CPUSET_MEMS,
+					Value: "1",
+				},
+				{
+					Kind:  lifecycle.IsolationControl_CGROUP_CPUSET_CPUS,
+					Value: "2",
+				},
+				{
+					Kind:  lifecycle.IsolationControl_CGROUP_CPUSET_MEMS,
+					Value: "3",
+				},
+			},
+			resources:     &ResourceConfig{},
+			shouldBe:      "3",
+			requestedKind: lifecycle.IsolationControl_CGROUP_CPUSET_MEMS,
 		},
 	}
 
@@ -425,10 +467,22 @@ func TestEventDispatcher_ResourceConfigFromReplies(t *testing.T) {
 		ed := newEventDispatcher()
 		output := ed.ResourceConfigFromReplies(er, testCase.resources)
 
-		if *output.CpusetCpus != testCase.shouldBe {
-			t.Errorf("Requested value of CPUSET %q doesn't match recieved one %q",
-				*output.CpusetCpus,
-				testCase.shouldBe)
+		switch testCase.requestedKind {
+		case lifecycle.IsolationControl_CGROUP_CPUSET_CPUS:
+			if *output.CpusetCpus != testCase.shouldBe {
+				t.Errorf("Requested value of CPUSET cpu %q doesn't match recieved one %q",
+					*output.CpusetCpus,
+					testCase.shouldBe)
+			}
+			break
+		case lifecycle.IsolationControl_CGROUP_CPUSET_MEMS:
+			if *output.CpusetMems != testCase.shouldBe {
+				t.Errorf("Requested value of CPUSET mem %q doesn't match recieved one %q",
+					*output.CpusetCpus,
+					testCase.shouldBe)
+			}
+			break
 		}
+
 	}
 }
