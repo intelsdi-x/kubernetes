@@ -230,7 +230,6 @@ func (ed *eventDispatcher) Start(socketAddress string) {
 	if err != nil {
 		glog.Fatalf("failed to bind to socket address: %v", err)
 	}
-	fmt.Println(lis.Addr().String())
 
 	// Create a grpc.Server.
 	s := grpc.NewServer()
