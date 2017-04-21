@@ -22,7 +22,7 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"sort"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -37,17 +37,16 @@ func getIsolators(eventCh chan EventDispatcherEvent, isolators *EventDispatcherE
 }
 
 func TestEventDispatcher_Register(t *testing.T) {
-	ed := newEventDispatcher()
+	EnableEventDispatcher()
+	ed := GetEventDispatcherSingleton().(*eventDispatcher)
 	testCases := []struct {
 		registrationEvents       []*lifecycle.RegisterRequest
-		requestedIsolators       []string
-		requestedSockets         []string
+		requestedIsolators       map[string]string
 		requestedIsolatorsNumber int
 	}{
 		{
 			registrationEvents:       []*lifecycle.RegisterRequest{},
-			requestedIsolators:       []string{},
-			requestedSockets:         []string{},
+			requestedIsolators:       map[string]string{},
 			requestedIsolatorsNumber: 0,
 		},
 		{
@@ -57,8 +56,9 @@ func TestEventDispatcher_Register(t *testing.T) {
 					SocketAddress: "socket1",
 				},
 			},
-			requestedIsolators:       []string{"isolator1"},
-			requestedSockets:         []string{"socket1"},
+			requestedIsolators: map[string]string{
+				"isolator1": "socket1",
+			},
 			requestedIsolatorsNumber: 1,
 		},
 		{
@@ -72,8 +72,10 @@ func TestEventDispatcher_Register(t *testing.T) {
 					SocketAddress: "socket2",
 				},
 			},
-			requestedIsolators:       []string{"isolator1", "isolator2"},
-			requestedSockets:         []string{"socket1", "socket2"},
+			requestedIsolators: map[string]string{
+				"isolator1": "socket1",
+				"isolator2": "socket2",
+			},
 			requestedIsolatorsNumber: 2,
 		},
 		{
@@ -91,8 +93,10 @@ func TestEventDispatcher_Register(t *testing.T) {
 					SocketAddress: "socket2",
 				},
 			},
-			requestedIsolators:       []string{"isolator1", "isolator2"},
-			requestedSockets:         []string{"socket1", "socket2"},
+			requestedIsolators: map[string]string{
+				"isolator1": "socket1",
+				"isolator2": "socket2",
+			},
 			requestedIsolatorsNumber: 2,
 		},
 	}
@@ -122,85 +126,81 @@ func TestEventDispatcher_Register(t *testing.T) {
 			)
 		}
 
-		for registeredIsolator := range ed.isolators {
-			if sort.SearchStrings(testCase.requestedIsolators, ed.isolators[registeredIsolator].name) < 0 {
-				t.Errorf("Isolator: %q has not been found in expected isolators %q",
-					registeredIsolator,
-					testCase.requestedIsolators)
+		for key, value := range testCase.requestedIsolators {
+			if ed.isolators[key] == nil {
+				t.Errorf("Expected isolator %q hasn't been registered", key)
 			}
-			if sort.SearchStrings(testCase.requestedSockets, ed.isolators[registeredIsolator].socketAddress) < 0 {
-				t.Errorf("Isolator's socket: %q has not been found in expected sockets %q",
-					ed.isolators[registeredIsolator].socketAddress,
-					testCase.requestedSockets)
+			if ed.isolators[key].socketAddress != value {
+				t.Errorf("Expected socket address %q doesn't match to registered one %q",
+					value,
+					ed.isolators[key].socketAddress)
 			}
+
 		}
 	}
 }
 
 func TestEventDispatcher_Unregister(t *testing.T) {
+	EnableEventDispatcher()
+	ed := GetEventDispatcherSingleton().(*eventDispatcher)
+
 	testCases := []struct {
-		isolators    []*lifecycle.RegisterRequest
+		isolators    []*lifecycle.UnregisterRequest
 		isolatorName string
 	}{
 		{
-			isolators: []*lifecycle.RegisterRequest{
+			isolators: []*lifecycle.UnregisterRequest{
 				{
-					Name:          "test1",
-					SocketAddress: "socket1",
+					Name: "test1",
 				},
 				{
-					Name:          "test2",
-					SocketAddress: "socket2",
+					Name: "test2",
 				},
 			},
 			isolatorName: "test1",
 		},
 		{
-			isolators: []*lifecycle.RegisterRequest{
+			isolators: []*lifecycle.UnregisterRequest{
 				{
-					Name:          "test1",
-					SocketAddress: "socket1",
+					Name: "test1",
 				},
 				{
-					Name:          "test2",
-					SocketAddress: "socket2",
+					Name: "test2",
 				},
 			},
 			isolatorName: "test3",
 		},
 		{
-			isolators: []*lifecycle.RegisterRequest{
+			isolators: []*lifecycle.UnregisterRequest{
 				{
-					Name:          "test1",
-					SocketAddress: "socket1",
+					Name: "test1",
 				},
 				{
-					Name:          "test2",
-					SocketAddress: "socket2",
+					Name: "test2",
 				},
 				{
-					Name:          "test2",
-					SocketAddress: "socket2",
+					Name: "test2",
 				},
 				{
-					Name:          "test3",
-					SocketAddress: "socket3",
+					Name: "test3",
 				},
 			},
 			isolatorName: "test2",
 		},
 		{
-			isolators:    []*lifecycle.RegisterRequest{},
+			isolators:    []*lifecycle.UnregisterRequest{},
 			isolatorName: "test1",
 		},
 	}
 
 	for _, testCase := range testCases {
-		ed := newEventDispatcher()
 		ed.isolators = make(map[string]*registeredIsolator)
 		for _, isolator := range testCase.isolators {
 			go getIsolators(ed.GetEventChannel(), &EventDispatcherEvent{})
-			ed.Register(ctx.Background(), isolator)
+			ed.Register(ctx.Background(), &lifecycle.RegisterRequest{
+				Name:          isolator.Name,
+				SocketAddress: "dummyIsolator address",
+			})
 		}
 		var event EventDispatcherEvent
 		go getIsolators(ed.GetEventChannel(), &event)
@@ -208,16 +208,19 @@ func TestEventDispatcher_Unregister(t *testing.T) {
 		if ed.isolators[testCase.isolatorName] != nil {
 			t.Error("Unregistration failed: expected item to remove is still available")
 		}
+		if event.Type != ISOLATOR_LIST_CHANGED {
+			t.Error("Recieved event Kind wasn't expected one")
+		}
 	}
 }
 
-type dummy struct {
+type dummyIsolator struct {
 	replyErr  string
 	serverErr error
 	lastEvent *lifecycle.Event
 }
 
-func (d *dummy) Notify(context ctx.Context, event *lifecycle.Event) (*lifecycle.EventReply, error) {
+func (d *dummyIsolator) Notify(context ctx.Context, event *lifecycle.Event) (*lifecycle.EventReply, error) {
 	d.lastEvent = event
 	return &lifecycle.EventReply{
 		IsolationControls: []*lifecycle.IsolationControl{
@@ -230,30 +233,22 @@ func (d *dummy) Notify(context ctx.Context, event *lifecycle.Event) (*lifecycle.
 	}, d.serverErr
 }
 
-func (d *dummy) setReplyError(err string) {
+func (d *dummyIsolator) setReplyError(err string) {
 	d.replyErr = err
 }
 
-func (d *dummy) setServerError(err error) {
+func (d *dummyIsolator) setServerError(err error) {
 	d.serverErr = err
 }
 
-func (d *dummy) getEvent() *lifecycle.Event {
+func (d *dummyIsolator) getEvent() *lifecycle.Event {
 	return d.lastEvent
 }
 
 type grpcDummyServer struct {
-	server   *grpc.Server
-	listener net.Listener
-	object   *dummy
-}
-
-func (g grpcDummyServer) SetReplyError(err string) {
-	g.object.replyErr = err
-}
-
-func (g grpcDummyServer) SetServerError(err error) {
-	g.object.serverErr = err
+	server        *grpc.Server
+	listener      net.Listener
+	dummyIsolator *dummyIsolator
 }
 
 func (g grpcDummyServer) GetAddress() string {
@@ -261,13 +256,13 @@ func (g grpcDummyServer) GetAddress() string {
 }
 
 func (g grpcDummyServer) GetLastEventFromServer() *lifecycle.Event {
-	return g.object.lastEvent
+	return g.dummyIsolator.lastEvent
 }
 
-func (g grpcDummyServer) ResetDummyObject() {
-	g.object.lastEvent = nil
-	g.object.serverErr = nil
-	g.object.replyErr = ""
+func (g grpcDummyServer) ResetDummyIsolator() {
+	g.dummyIsolator.lastEvent = nil
+	g.dummyIsolator.serverErr = nil
+	g.dummyIsolator.replyErr = ""
 }
 
 func (g grpcDummyServer) Close() {
@@ -281,12 +276,12 @@ func runDummyServer() (*grpcDummyServer, error) {
 		return nil, err
 	}
 	grpcDummy := grpcDummyServer{
-		server:   grpc.NewServer(),
-		listener: lis,
-		object:   &dummy{},
+		server:        grpc.NewServer(),
+		listener:      lis,
+		dummyIsolator: &dummyIsolator{},
 	}
 
-	lifecycle.RegisterIsolatorServer(grpcDummy.server, grpcDummy.object)
+	lifecycle.RegisterIsolatorServer(grpcDummy.server, grpcDummy.dummyIsolator)
 	go grpcDummy.server.Serve(lis)
 	return &grpcDummy, nil
 }
@@ -304,9 +299,10 @@ func TestEventDispatcher_PreStartPod(t *testing.T) {
 	}
 
 	pod := &v1.Pod{}
-
-	ed := newEventDispatcher()
+	EnableEventDispatcher()
+	ed := GetEventDispatcherSingleton().(*eventDispatcher)
 	ed.isolators = make(map[string]*registeredIsolator)
+	go getIsolators(ed.GetEventChannel(), &EventDispatcherEvent{})
 	ed.Register(ctx.Background(), isolator)
 
 	testCases := []struct {
@@ -332,22 +328,28 @@ func TestEventDispatcher_PreStartPod(t *testing.T) {
 	}
 
 	for _, testCase := range testCases {
-		server.ResetDummyObject()
-		server.SetReplyError(testCase.replyError)
-		server.SetServerError(testCase.serverError)
+		server.ResetDummyIsolator()
+		server.dummyIsolator.setReplyError(testCase.replyError)
+		server.dummyIsolator.setServerError(testCase.serverError)
 
 		eventReply, err := ed.PreStartPod(pod, "/")
+
+		// Check if GRPC is working fine.
 		if err != nil {
+			// Check case if GRPC server error contains expected message.
 			if !strings.Contains(err.Error(), testCase.serverError.Error()) {
 				t.Errorf("Expected error(%q) isn't message of grpc error(%q)",
 					testCase.serverError,
 					err)
 			}
+			// GRPC server should return empty EventReply, so we expect that error message is ""
 			if eventReply.Error != "" {
 				t.Errorf("EventReply Error should be \"\" but it wasn't: %q",
 					eventReply.Error)
 			}
 		} else {
+			// In case of GRPC server doesn't return error code, check if EventReply contains expected
+			// EvenReply error message.
 			if eventReply.Error != testCase.replyError {
 				t.Errorf("Expected eventReply error(%q) doesn't match to recived one(%q)",
 					testCase.replyError, eventReply.Error)
@@ -368,7 +370,8 @@ func TestEventDispatcher_PostStopPod(t *testing.T) {
 		SocketAddress: server.GetAddress(),
 	}
 
-	ed := newEventDispatcher()
+	EnableEventDispatcher()
+	ed := GetEventDispatcherSingleton().(*eventDispatcher)
 	ed.isolators = make(map[string]*registeredIsolator)
 	ed.Register(ctx.Background(), isolator)
 
@@ -384,10 +387,12 @@ func TestEventDispatcher_PostStopPod(t *testing.T) {
 	}
 
 	for _, testCase := range testCases {
-		server.ResetDummyObject()
-		server.SetServerError(testCase.serverError)
+		server.ResetDummyIsolator()
+		server.dummyIsolator.setServerError(testCase.serverError)
 
 		err := ed.PostStopPod("/")
+
+		// Check that GRPC server is returning expected error message.
 		if err != nil {
 			if !strings.Contains(err.Error(), testCase.serverError.Error()) {
 				t.Errorf("Expected error(%q) isn't message of grpc error(%q)",
@@ -395,8 +400,10 @@ func TestEventDispatcher_PostStopPod(t *testing.T) {
 					err)
 			}
 		}
+
+		// Verify that isolator receives not nil lifecycle.Event object
 		if server.GetLastEventFromServer() == nil {
-			t.Error("Lifecycle object should be accessable in lifecycle handler, but it wasn't")
+			t.Error("Lifecycle dummyIsolator should be accessable in lifecycle handler, but it wasn't")
 		}
 
 	}
@@ -404,10 +411,8 @@ func TestEventDispatcher_PostStopPod(t *testing.T) {
 
 func TestEventDispatcher_ResourceConfigFromReplies(t *testing.T) {
 	testCases := []struct {
-		isolators     []*lifecycle.IsolationControl
-		resources     *ResourceConfig
-		shouldBe      string
-		requestedKind lifecycle.IsolationControl_Kind
+		isolators []*lifecycle.IsolationControl
+		resources map[string]string
 	}{
 		{
 			isolators: []*lifecycle.IsolationControl{
@@ -416,9 +421,9 @@ func TestEventDispatcher_ResourceConfigFromReplies(t *testing.T) {
 					Value: "5",
 				},
 			},
-			resources:     &ResourceConfig{},
-			shouldBe:      "5",
-			requestedKind: lifecycle.IsolationControl_CGROUP_CPUSET_CPUS,
+			resources: map[string]string{
+				"CpusetCpus": "5",
+			},
 		},
 		{
 			isolators: []*lifecycle.IsolationControl{
@@ -435,9 +440,10 @@ func TestEventDispatcher_ResourceConfigFromReplies(t *testing.T) {
 					Value: "3",
 				},
 			},
-			resources:     &ResourceConfig{},
-			shouldBe:      "2",
-			requestedKind: lifecycle.IsolationControl_CGROUP_CPUSET_CPUS,
+			resources: map[string]string{
+				"CpusetCpus": "2",
+				"CpusetMems": "3",
+			},
 		},
 		{
 			isolators: []*lifecycle.IsolationControl{
@@ -454,35 +460,29 @@ func TestEventDispatcher_ResourceConfigFromReplies(t *testing.T) {
 					Value: "3",
 				},
 			},
-			resources:     &ResourceConfig{},
-			shouldBe:      "3",
-			requestedKind: lifecycle.IsolationControl_CGROUP_CPUSET_MEMS,
+			resources: map[string]string{
+				"CpusetCpus": "2",
+				"CpusetMems": "3",
+			},
 		},
 	}
 
 	for _, testCase := range testCases {
-		er := &lifecycle.EventReply{
+		eventReply := &lifecycle.EventReply{
 			IsolationControls: testCase.isolators,
 		}
-		ed := newEventDispatcher()
-		output := ed.ResourceConfigFromReplies(er, testCase.resources)
+		output := ResourceConfigFromReply(eventReply, &ResourceConfig{})
 
-		switch testCase.requestedKind {
-		case lifecycle.IsolationControl_CGROUP_CPUSET_CPUS:
-			if *output.CpusetCpus != testCase.shouldBe {
-				t.Errorf("Requested value of CPUSET cpu %q doesn't match recieved one %q",
-					*output.CpusetCpus,
-					testCase.shouldBe)
+		reflectedStruct := reflect.ValueOf(output)
+
+		for key, value := range testCase.resources {
+			data := reflect.Indirect(reflectedStruct).FieldByName(key).Interface().(*string)
+			if *data != value {
+				t.Errorf("Invalid value of %q. Expected %s, has got %s",
+					key,
+					value,
+					*data)
 			}
-			break
-		case lifecycle.IsolationControl_CGROUP_CPUSET_MEMS:
-			if *output.CpusetMems != testCase.shouldBe {
-				t.Errorf("Requested value of CPUSET mem %q doesn't match recieved one %q",
-					*output.CpusetCpus,
-					testCase.shouldBe)
-			}
-			break
 		}
-
 	}
 }
