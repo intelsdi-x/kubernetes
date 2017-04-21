@@ -66,15 +66,6 @@ type EventDispatcher interface {
 	// can register themselves to receive lifecycle events.
 	Start(socketAddress string)
 
-	// Returns a pointer to an updated copy of the supplied resource config,
-	// based on the isolation controls in the event reply. The original resource
-	// config is not updated in-place.
-	ResourceConfigFromReply(reply *lifecycle.EventReply, resources *ResourceConfig) *ResourceConfig
-
-	// Updates the supplied container config in-place based on the isolation
-	// controls in the event reply.
-	UpdateContainerConfigWithReply(reply *lifecycle.EventReply, config *runtime.ContainerConfig)
-
 	// Get communication channel.
 	GetEventChannel() chan EventDispatcherEvent
 }
@@ -95,7 +86,7 @@ type eventDispatcher struct {
 }
 
 var eventDispatcherEnabled bool
-var dispatcherSingleton *eventDispatcher
+var dispatcherSingleton EventDispatcher
 var once sync.Once
 
 // Enables the event dispatcher subsystem for this Kubelet instance.
@@ -107,7 +98,7 @@ func EnableEventDispatcher() {
 	eventDispatcherEnabled = true
 }
 
-func GetEventDispatcherSingleton() *eventDispatcher {
+func GetEventDispatcherSingleton() EventDispatcher {
 	once.Do(func() {
 		if eventDispatcherEnabled {
 			dispatcherSingleton = &eventDispatcher{
@@ -287,7 +278,10 @@ func (ed *eventDispatcher) Unregister(ctx context.Context, request *lifecycle.Un
 	return &lifecycle.UnregisterReply{}, nil
 }
 
-func (ed *eventDispatcher) ResourceConfigFromReply(reply *lifecycle.EventReply, resources *ResourceConfig) *ResourceConfig {
+// Returns a pointer to an updated copy of the supplied resource config,
+// based on the isolation controls in the event reply. The original resource
+// config is not updated in-place.
+func ResourceConfigFromReply(reply *lifecycle.EventReply, resources *ResourceConfig) *ResourceConfig {
 	// This is a safe copy; ResourceConfig contains only pointers to primitives.
 	updatedResources := &ResourceConfig{}
 	*updatedResources = *resources
@@ -305,7 +299,9 @@ func (ed *eventDispatcher) ResourceConfigFromReply(reply *lifecycle.EventReply, 
 	return updatedResources
 }
 
-func (ed *eventDispatcher) UpdateContainerConfigWithReply(reply *lifecycle.EventReply, config *runtime.ContainerConfig) {
+// Updates the supplied container config in-place based on the isolation
+// controls in the event reply.
+func UpdateContainerConfigWithReply(reply *lifecycle.EventReply, config *runtime.ContainerConfig) {
 	// Append environment variables to container config.
 	for _, control := range reply.IsolationControls {
 		switch control.Kind {
@@ -375,10 +371,6 @@ func (ed *eventDispatcherNoop) PostStopContainer(podName, containerName string) 
 
 func (ed *eventDispatcherNoop) Start(socketAddress string) {
 
-}
-
-func (ed *eventDispatcherNoop) ResourceConfigFromReplies(reply *lifecycle.EventReply, resources *ResourceConfig) *ResourceConfig {
-	return resources
 }
 
 func (ed *eventDispatcherNoop) GetEventChannel() chan EventDispatcherEvent {
