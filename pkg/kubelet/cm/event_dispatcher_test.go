@@ -30,10 +30,105 @@ import (
 	"google.golang.org/grpc"
 	"k8s.io/kubernetes/pkg/api/v1"
 	"k8s.io/kubernetes/pkg/kubelet/api/v1alpha1/lifecycle"
+	"k8s.io/kubernetes/pkg/kubelet/api/v1alpha1/runtime"
 )
+
+type dummyIsolator struct {
+	replyErr  string
+	serverErr error
+	lastEvent *lifecycle.Event
+}
+
+func (d *dummyIsolator) Notify(context ctx.Context, event *lifecycle.Event) (*lifecycle.EventReply, error) {
+	d.lastEvent = event
+	return &lifecycle.EventReply{
+		IsolationControls: []*lifecycle.IsolationControl{
+			{
+				Kind:  lifecycle.IsolationControl_CGROUP_CPUSET_CPUS,
+				Value: "0",
+			},
+		},
+		Error: d.replyErr,
+	}, d.serverErr
+}
+
+func (d *dummyIsolator) setReplyError(err string) {
+	d.replyErr = err
+}
+
+func (d *dummyIsolator) setServerError(err error) {
+	d.serverErr = err
+}
+
+func (d *dummyIsolator) getEvent() *lifecycle.Event {
+	return d.lastEvent
+}
+
+type grpcDummyServer struct {
+	server        *grpc.Server
+	listener      net.Listener
+	dummyIsolator *dummyIsolator
+}
+
+func (g grpcDummyServer) GetAddress() string {
+	return g.listener.Addr().String()
+}
+
+func (g grpcDummyServer) GetLastEventFromServer() *lifecycle.Event {
+	return g.dummyIsolator.lastEvent
+}
+
+func (g grpcDummyServer) ResetDummyIsolator() {
+	g.dummyIsolator.lastEvent = nil
+	g.dummyIsolator.serverErr = nil
+	g.dummyIsolator.replyErr = ""
+}
+
+func (g grpcDummyServer) Close() {
+	g.server.Stop()
+	g.listener.Close()
+}
+
+func runDummyServer() (*grpcDummyServer, error) {
+	lis, err := net.Listen("tcp", ":0")
+	if err != nil {
+		return nil, err
+	}
+	grpcDummy := grpcDummyServer{
+		server:        grpc.NewServer(),
+		listener:      lis,
+		dummyIsolator: &dummyIsolator{},
+	}
+
+	lifecycle.RegisterIsolatorServer(grpcDummy.server, grpcDummy.dummyIsolator)
+	go grpcDummy.server.Serve(lis)
+	return &grpcDummy, nil
+}
 
 func getIsolators(eventCh chan EventDispatcherEvent, isolators *EventDispatcherEvent) {
 	*isolators = <-eventCh
+}
+
+func TestEventDispatcherNoop(t *testing.T) {
+	eventDispatcherEnabled = false
+	ed := eventDispatcherNoop{}
+	ed.Start(":0")
+
+	if ed.PostStopPod("/") != nil {
+		t.Error("PostStopPod for EventDispatcherNoop shouldn't return anything")
+	}
+	if reply, err := ed.PreStartPod(&v1.Pod{}, "/"); reply != nil || err != nil {
+		t.Error("PreStartPod for EventDispatcherNoop shouldn't return anything")
+	}
+	if ed.GetEventChannel() != nil {
+		t.Error("GetEventChannel for EventDispatcherNoop shouldn't return anything")
+	}
+	if ed.PostStopContainer("", "") != nil {
+		t.Error("PostStopContainer for EventDispatcherNoop shouldn't return anything")
+	}
+	if reply, err := ed.PreStartContainer("", ""); reply != nil || err != nil {
+		t.Error("PreStartContainer for EventDispatcherNoop shouldn't return anything")
+	}
 }
 
 func TestEventDispatcher_Register(t *testing.T) {
@@ -214,79 +309,7 @@ func TestEventDispatcher_Unregister(t *testing.T) {
 	}
 }
 
-type dummyIsolator struct {
-	replyErr  string
-	serverErr error
-	lastEvent *lifecycle.Event
-}
-
-func (d *dummyIsolator) Notify(context ctx.Context, event *lifecycle.Event) (*lifecycle.EventReply, error) {
-	d.lastEvent = event
-	return &lifecycle.EventReply{
-		IsolationControls: []*lifecycle.IsolationControl{
-			{
-				Kind:  lifecycle.IsolationControl_CGROUP_CPUSET_CPUS,
-				Value: "0",
-			},
-		},
-		Error: d.replyErr,
-	}, d.serverErr
-}
-
-func (d *dummyIsolator) setReplyError(err string) {
-	d.replyErr = err
-}
-
-func (d *dummyIsolator) setServerError(err error) {
-	d.serverErr = err
-}
-
-func (d *dummyIsolator) getEvent() *lifecycle.Event {
-	return d.lastEvent
-}
-
-type grpcDummyServer struct {
-	server        *grpc.Server
-	listener      net.Listener
-	dummyIsolator *dummyIsolator
-}
-
-func (g grpcDummyServer) GetAddress() string {
-	return g.listener.Addr().String()
-}
-
-func (g grpcDummyServer) GetLastEventFromServer() *lifecycle.Event {
-	return g.dummyIsolator.lastEvent
-}
-
-func (g grpcDummyServer) ResetDummyIsolator() {
-	g.dummyIsolator.lastEvent = nil
-	g.dummyIsolator.serverErr = nil
-	g.dummyIsolator.replyErr = ""
-}
-
-func (g grpcDummyServer) Close() {
-	g.server.Stop()
-	g.listener.Close()
-}
-
-func runDummyServer() (*grpcDummyServer, error) {
-	lis, err := net.Listen("tcp", ":0")
-	if err != nil {
-		return nil, err
-	}
-	grpcDummy := grpcDummyServer{
-		server:        grpc.NewServer(),
-		listener:      lis,
-		dummyIsolator: &dummyIsolator{},
-	}
-
-	lifecycle.RegisterIsolatorServer(grpcDummy.server, grpcDummy.dummyIsolator)
-	go grpcDummy.server.Serve(lis)
-	return &grpcDummy, nil
-}
-
-func TestEventDispatcher_PreStartPod(t *testing.T) {
+func testEventDispatcher_preStart(t *testing.T, ed *eventDispatcher, preStartFunc func() (*lifecycle.EventReply, error)) {
 	server, err := runDummyServer()
 	if err != nil {
 		t.Skipf("Cannot run GRPC server: %q", err)
@@ -298,10 +321,6 @@ func TestEventDispatcher_PreStartPod(t *testing.T) {
 		SocketAddress: server.GetAddress(),
 	}
 
-	pod := &v1.Pod{}
-	EnableEventDispatcher()
-	ed := GetEventDispatcherSingleton().(*eventDispatcher)
-	ed.isolators = make(map[string]*registeredIsolator)
 	go getIsolators(ed.GetEventChannel(), &EventDispatcherEvent{})
 	ed.Register(ctx.Background(), isolator)
 
@@ -332,7 +351,7 @@ func TestEventDispatcher_PreStartPod(t *testing.T) {
 		server.dummyIsolator.setReplyError(testCase.replyError)
 		server.dummyIsolator.setServerError(testCase.serverError)
 
-		eventReply, err := ed.PreStartPod(pod, "/")
+		eventReply, err := preStartFunc()
 
 		// Check if GRPC is working fine.
 		if err != nil {
@@ -358,7 +377,28 @@ func TestEventDispatcher_PreStartPod(t *testing.T) {
 	}
 }
 
-func TestEventDispatcher_PostStopPod(t *testing.T) {
+func TestEventDispatcher_PreStartPod(t *testing.T) {
+	EnableEventDispatcher()
+	ed := GetEventDispatcherSingleton().(*eventDispatcher)
+	ed.isolators = make(map[string]*registeredIsolator)
+	pod := &v1.Pod{}
+
+	testEventDispatcher_preStart(t, ed, func() (*lifecycle.EventReply, error) {
+		return ed.PreStartPod(pod, "/")
+	})
+}
+
+func TestEventDispatcher_PreStarContainer(t *testing.T) {
+	EnableEventDispatcher()
+	ed := GetEventDispatcherSingleton().(*eventDispatcher)
+	ed.isolators = make(map[string]*registeredIsolator)
+
+	testEventDispatcher_preStart(t, ed, func() (*lifecycle.EventReply, error) {
+		return ed.PreStartContainer("/", "/")
+	})
+}
+
+func testEventDispatcher_postStop(t *testing.T, ed *eventDispatcher, stopFunc func() error) {
 	server, err := runDummyServer()
 	if err != nil {
 		t.Skipf("Cannot run GRPC server: %q", err)
@@ -369,10 +409,6 @@ func TestEventDispatcher_PostStopPod(t *testing.T) {
 		Name:          "isolator1",
 		SocketAddress: server.GetAddress(),
 	}
-
-	EnableEventDispatcher()
-	ed := GetEventDispatcherSingleton().(*eventDispatcher)
-	ed.isolators = make(map[string]*registeredIsolator)
 	ed.Register(ctx.Background(), isolator)
 
 	testCases := []struct {
@@ -390,7 +426,7 @@ func TestEventDispatcher_PostStopPod(t *testing.T) {
 		server.ResetDummyIsolator()
 		server.dummyIsolator.setServerError(testCase.serverError)
 
-		err := ed.PostStopPod("/")
+		err := stopFunc()
 
 		// Check that GRPC server is returning expected error message.
 		if err != nil {
@@ -409,7 +445,25 @@ func TestEventDispatcher_PostStopPod(t *testing.T) {
 	}
 }
 
-func TestEventDispatcher_ResourceConfigFromReplies(t *testing.T) {
+func TestEventDispatcher_PostStopPod(t *testing.T) {
+	EnableEventDispatcher()
+	ed := GetEventDispatcherSingleton().(*eventDispatcher)
+	ed.isolators = make(map[string]*registeredIsolator)
+	testEventDispatcher_postStop(t, ed, func() error {
+		return ed.PostStopPod("/")
+	})
+}
+
+func TestEventDispatcher_PostStopContainer(t *testing.T) {
+	EnableEventDispatcher()
+	ed := GetEventDispatcherSingleton().(*eventDispatcher)
+	ed.isolators = make(map[string]*registeredIsolator)
+	testEventDispatcher_postStop(t, ed, func() error {
+		return ed.PostStopContainer("pod_name", "container_name")
+	})
+}
+
+func TestResourceConfigFromReplies(t *testing.T) {
 	testCases := []struct {
 		isolators []*lifecycle.IsolationControl
 		resources map[string]string
@@ -476,6 +530,35 @@ func TestEventDispatcher_ResourceConfigFromReplies(t *testing.T) {
 		reflectedStruct := reflect.ValueOf(output)
 
 		for key, value := range testCase.resources {
+			data := reflect.Indirect(reflectedStruct).FieldByName(key).Interface().(*string)
+			if *data != value {
+				t.Errorf("Invalid value of %q. Expected %s, has got %s",
+					key,
+					value,
+					*data)
+			}
+		}
+	}
+}
+
+func TestUpdateContainerConfigWithReply(t *testing.T) {
+
+	testCases := []struct {
+		reply          *lifecycle.EventReply
+		config         *runtime.ContainerConfig
+		expectedConfig map[string]string
+	}{
+		{
+			reply:          &lifecycle.EventReply{},
+			config:         &runtime.ContainerConfig{},
+			expectedConfig: map[string]string{},
+		},
+	}
+
+	for _, testCase := range testCases {
+		UpdateContainerConfigWithReply(testCase.reply, testCase.config)
+		reflectedStruct := reflect.ValueOf(testCase.config)
+		for key, value := range testCase.expectedConfig {
 			data := reflect.Indirect(reflectedStruct).FieldByName(key).Interface().(*string)
 			if *data != value {
 				t.Errorf("Invalid value of %q. Expected %s, has got %s",
