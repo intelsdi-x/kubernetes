@@ -205,6 +205,11 @@ func DeepCopy_v1alpha1_KubeletConfiguration(in interface{}, out interface{}, c *
 			*out = new(bool)
 			**out = **in
 		}
+		if in.EnableExtendedIsolation != nil {
+			in, out := &in.EnableExtendedIsolation, &out.EnableExtendedIsolation
+			*out = new(bool)
+			**out = **in
+		}
 		if in.LockFilePath != nil {
 			in, out := &in.LockFilePath, &out.LockFilePath
 			*out = new(string)
