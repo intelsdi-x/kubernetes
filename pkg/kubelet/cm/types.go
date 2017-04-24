@@ -19,7 +19,7 @@ package cm
 import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/kubernetes/pkg/api/v1"
-	hugepage "github.com/opencontainers/runc/libcontainer/configs"
+	libcontainerconfigs "github.com/opencontainers/runc/libcontainer/configs"
 )
 
 // ResourceConfig holds information about all the supported cgroup resource parameters.
@@ -39,7 +39,7 @@ type ResourceConfig struct {
 	// List format: http://man7.org/linux/man-pages/man7/cpuset.7.html#FORMATS
 	CpusetMems *string
 	// Hugetlb limit (in bytes)
-	HugetlbLimit []*hugepage.HugepageLimit
+	HugetlbLimit []*libcontainerconfigs.HugepageLimit
 }
 
 // CgroupName is the abstract name of a cgroup prior to any driver specific conversion.

@@ -32,7 +32,7 @@ import (
 	"k8s.io/kubernetes/pkg/api/v1"
 	"k8s.io/kubernetes/pkg/kubelet/api/v1alpha1/lifecycle"
 	"k8s.io/kubernetes/pkg/kubelet/api/v1alpha1/runtime"
-	hugepage "github.com/opencontainers/runc/libcontainer/configs"
+	libcontainerconfigs "github.com/opencontainers/runc/libcontainer/configs"
 )
 
 type EventDispatcherEventType int
@@ -295,22 +295,9 @@ func ResourceConfigFromReply(reply *lifecycle.EventReply, resources *ResourceCon
 		case lifecycle.IsolationControl_CGROUP_CPUSET_MEMS:
 			updatedResources.CpusetMems = &control.Value
 		case lifecycle.IsolationControl_CGROUP_HUGETLB_LIMIT:
-			if len(control.MapValue) == 0 {
-				glog.Warningf("[%s] isolator respons MapValue is empty, skipping", control.Kind)
-				continue
-			}
-			for k, v := range control.MapValue {
-				limit, err:= strconv.ParseUint(v,10,64)
-				if err != nil {
-					glog.Warningf("Invalid value in isolation control [%s] %s:%s, skipping", control.Kind, k, v)
-					continue
-				}
-				hugePageLimit := &hugepage.HugepageLimit {
-					Pagesize: k,
-					Limit:    limit }
-
-				updatedResources.HugetlbLimit = append(updatedResources.HugetlbLimit, hugePageLimit)
-			}
+			//Append is used to cover case where there are multiple separate isolators, each for different
+			//page size. In case of conflicting replies, tha last one applied will "win"
+			updatedResources.HugetlbLimit = append(updatedResources.HugetlbLimit, hugePageLimitsFromIsolationControl(control)...)
 		default:
 			glog.Warningf("ignoring unknown isolation control kind [%s]", control.Kind)
 		}
@@ -360,6 +347,28 @@ func (ed *eventDispatcher) isolator(name string) *registeredIsolator {
 		}
 	}
 	return nil
+}
+
+
+//hugePageLimitsFromIsolationControl converts MapValue from isolator response into HugepageLimit structures
+func hugePageLimitsFromIsolationControl(ctrl *lifecycle.IsolationControl) ([]*libcontainerconfigs.HugepageLimit) {
+	out := []*libcontainerconfigs.HugepageLimit{}
+	if len(ctrl.MapValue) == 0 {
+		glog.Warningf("[%s] isolator response MapValue is empty, skipping", ctrl.Kind)
+		return out
+	}
+	for k,v := range ctrl.MapValue {
+		limit, err:= strconv.ParseUint(v,10,64)
+		if err != nil {
+			glog.Warningf("Invalid value in isolation control [%s] response %s:%s, skipping", ctrl.Kind, k, v)
+			continue
+		}
+		hugePageLimit := &libcontainerconfigs.HugepageLimit {
+			Pagesize: k,
+			Limit:    limit }
+		out = append(out,hugePageLimit)
+	}
+	return out
 }
 
 
