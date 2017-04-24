@@ -20,19 +20,19 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
-	"strings"
 	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/golang/glog"
 	proto "github.com/golang/protobuf/proto"
+	libcontainerconfigs "github.com/opencontainers/runc/libcontainer/configs"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/kubernetes/pkg/api/v1"
 	"k8s.io/kubernetes/pkg/kubelet/api/v1alpha1/lifecycle"
 	"k8s.io/kubernetes/pkg/kubelet/api/v1alpha1/runtime"
-	libcontainerconfigs "github.com/opencontainers/runc/libcontainer/configs"
 )
 
 type EventDispatcherEventType int
@@ -308,20 +308,32 @@ func ResourceConfigFromReply(reply *lifecycle.EventReply, resources *ResourceCon
 // Updates the supplied container config in-place based on the isolation
 // controls in the event reply.
 func UpdateContainerConfigWithReply(reply *lifecycle.EventReply, config *runtime.ContainerConfig) {
+	if reply == nil {
+		glog.Info("eventDispatcherNoop has been detected - skipping container configuration update")
+		return
+	}
+	if reply.Error != "" {
+		glog.Errorf("isolator returned error: %s", reply.Error)
+		return
+	}
+
+	updatedConfig := &runtime.ContainerConfig{}
+	*updatedConfig = *config
+
 	// Append environment variables to container config.
 	for _, control := range reply.IsolationControls {
 		switch control.Kind {
 		case lifecycle.IsolationControl_CONTAINER_ENV_VAR:
 			for k, v := range control.MapValue {
 				entry := &runtime.KeyValue{Key: k, Value: v}
-				config.Envs = append(config.Envs, entry)
+				config.Envs = append(updatedConfig.Envs, entry)
 			}
 		default:
 			continue
 		}
 	}
 
-	if config.Linux == nil {
+	if updatedConfig.Linux == nil {
 		glog.Infof("skipping Linux-only isolation settings")
 		return
 	}
@@ -330,9 +342,9 @@ func UpdateContainerConfigWithReply(reply *lifecycle.EventReply, config *runtime
 	for _, control := range reply.IsolationControls {
 		switch control.Kind {
 		case lifecycle.IsolationControl_CGROUP_CPUSET_CPUS:
-			config.Linux.Resources.CpusetCpus = control.Value
+			updatedConfig.Linux.Resources.CpusetCpus = control.Value
 		case lifecycle.IsolationControl_CGROUP_CPUSET_MEMS:
-			config.Linux.Resources.CpusetMems = control.Value
+			updatedConfig.Linux.Resources.CpusetMems = control.Value
 		default:
 			glog.Infof("encountered unknown isolation control kind: [%d]", control.Kind)
 			continue
@@ -349,28 +361,26 @@ func (ed *eventDispatcher) isolator(name string) *registeredIsolator {
 	return nil
 }
 
-
 //hugePageLimitsFromIsolationControl converts MapValue from isolator response into HugepageLimit structures
-func hugePageLimitsFromIsolationControl(ctrl *lifecycle.IsolationControl) ([]*libcontainerconfigs.HugepageLimit) {
+func hugePageLimitsFromIsolationControl(ctrl *lifecycle.IsolationControl) []*libcontainerconfigs.HugepageLimit {
 	out := []*libcontainerconfigs.HugepageLimit{}
 	if len(ctrl.MapValue) == 0 {
 		glog.Warningf("[%s] isolator response MapValue is empty, skipping", ctrl.Kind)
 		return out
 	}
-	for k,v := range ctrl.MapValue {
-		limit, err:= strconv.ParseUint(v,10,64)
+	for k, v := range ctrl.MapValue {
+		limit, err := strconv.ParseUint(v, 10, 64)
 		if err != nil {
 			glog.Warningf("Invalid value in isolation control [%s] response %s:%s, skipping", ctrl.Kind, k, v)
 			continue
 		}
-		hugePageLimit := &libcontainerconfigs.HugepageLimit {
+		hugePageLimit := &libcontainerconfigs.HugepageLimit{
 			Pagesize: k,
-			Limit:    limit }
-		out = append(out,hugePageLimit)
+			Limit:    limit}
+		out = append(out, hugePageLimit)
 	}
 	return out
 }
-
 
 // eventDispatcherNoop implements EventDispatcher interface.
 // It is a no-op implementation and basically does nothing
