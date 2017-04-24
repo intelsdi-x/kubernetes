@@ -526,9 +526,7 @@ func TestResourceConfigFromReplies(t *testing.T) {
 			IsolationControls: testCase.isolators,
 		}
 		output := ResourceConfigFromReply(eventReply, &ResourceConfig{})
-
 		reflectedStruct := reflect.ValueOf(output)
-
 		for key, value := range testCase.resources {
 			data := reflect.Indirect(reflectedStruct).FieldByName(key).Interface().(*string)
 			if *data != value {
@@ -544,27 +542,138 @@ func TestResourceConfigFromReplies(t *testing.T) {
 func TestUpdateContainerConfigWithReply(t *testing.T) {
 
 	testCases := []struct {
-		reply          *lifecycle.EventReply
-		config         *runtime.ContainerConfig
-		expectedConfig map[string]string
+		isolationControls []*lifecycle.IsolationControl
+		passedEnvs        []*runtime.KeyValue
+		linuxContainerRes *runtime.LinuxContainerResources
+		expectedEnvs      []*runtime.KeyValue
+		expectedResources map[string]string
 	}{
 		{
-			reply:          &lifecycle.EventReply{},
-			config:         &runtime.ContainerConfig{},
-			expectedConfig: map[string]string{},
+			isolationControls: []*lifecycle.IsolationControl{
+				{
+					Kind:  lifecycle.IsolationControl_CGROUP_CPUSET_MEMS,
+					Value: "5",
+				},
+				{
+					Kind:  lifecycle.IsolationControl_CGROUP_CPUSET_CPUS,
+					Value: "1",
+				},
+				{
+					Kind: lifecycle.IsolationControl_CONTAINER_ENV_VAR,
+					MapValue: map[string]string{
+						"foo": "bar",
+					},
+				},
+			},
+			linuxContainerRes: &runtime.LinuxContainerResources{},
+			passedEnvs:        []*runtime.KeyValue{},
+			expectedEnvs: []*runtime.KeyValue{
+				{
+					Key:   "foo",
+					Value: "bar",
+				},
+			},
+			expectedResources: map[string]string{
+				"CpusetCpus": "1",
+				"CpusetMems": "5",
+			},
+		},
+		{
+			isolationControls: []*lifecycle.IsolationControl{
+				{
+					Kind:  lifecycle.IsolationControl_CGROUP_CPUSET_MEMS,
+					Value: "7",
+				},
+				{
+					Kind: lifecycle.IsolationControl_CONTAINER_ENV_VAR,
+					MapValue: map[string]string{
+						"foo": "bar",
+					},
+				},
+			},
+			linuxContainerRes: &runtime.LinuxContainerResources{},
+			passedEnvs: []*runtime.KeyValue{
+				{
+					Key:   "bar",
+					Value: "foo",
+				},
+			},
+			expectedEnvs: []*runtime.KeyValue{
+				{
+					Key:   "bar",
+					Value: "foo",
+				},
+				{
+					Key:   "foo",
+					Value: "bar",
+				},
+			},
+			expectedResources: map[string]string{
+				"CpusetMems": "7",
+			},
+		},
+		{
+			isolationControls: []*lifecycle.IsolationControl{
+				{
+					Kind:  lifecycle.IsolationControl_CGROUP_CPUSET_MEMS,
+					Value: "7",
+				},
+				{
+					Kind: lifecycle.IsolationControl_CONTAINER_ENV_VAR,
+					MapValue: map[string]string{
+						"foo": "bar",
+					},
+				},
+			},
+			passedEnvs: []*runtime.KeyValue{
+				{
+					Key:   "bar",
+					Value: "foo",
+				},
+			},
+			expectedEnvs: []*runtime.KeyValue{
+				{
+					Key:   "bar",
+					Value: "foo",
+				},
+				{
+					Key:   "foo",
+					Value: "bar",
+				},
+			},
 		},
 	}
 
 	for _, testCase := range testCases {
-		UpdateContainerConfigWithReply(testCase.reply, testCase.config)
-		reflectedStruct := reflect.ValueOf(testCase.config)
-		for key, value := range testCase.expectedConfig {
-			data := reflect.Indirect(reflectedStruct).FieldByName(key).Interface().(*string)
-			if *data != value {
-				t.Errorf("Invalid value of %q. Expected %s, has got %s",
-					key,
-					value,
-					*data)
+		config := &runtime.ContainerConfig{
+			Envs: testCase.passedEnvs,
+		}
+		if testCase.linuxContainerRes != nil {
+			config.Linux = &runtime.LinuxContainerConfig{
+				Resources: testCase.linuxContainerRes,
+			}
+		}
+
+		reply := &lifecycle.EventReply{
+			IsolationControls: testCase.isolationControls,
+		}
+
+		UpdateContainerConfigWithReply(reply, config)
+		if !reflect.DeepEqual(config.Envs, testCase.expectedEnvs) {
+			t.Errorf("Obtained envs (%q) are not expected one (%q)",
+				config.Envs, testCase.expectedEnvs)
+		}
+
+		if testCase.linuxContainerRes != nil {
+			reflectedStruct := reflect.ValueOf(config.Linux.Resources)
+			for key, value := range testCase.expectedResources {
+				data := reflect.Indirect(reflectedStruct).FieldByName(key).Interface().(string)
+				if data != value {
+					t.Errorf("Invalid value of %q. Expected %s, has got %s",
+						key,
+						value,
+						data)
+				}
 			}
 		}
 	}
