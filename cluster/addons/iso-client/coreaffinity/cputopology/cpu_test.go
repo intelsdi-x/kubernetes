@@ -22,6 +22,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"reflect"
 )
 
 var TOPOLOGY CPUTopology = CPUTopology{
@@ -37,7 +38,7 @@ var TOPOLOGY CPUTopology = CPUTopology{
 	},
 }
 
-func TestGetSocketsNumber(t *testing.T) {
+func TestCPUTopology_GetNumSockets(t *testing.T) {
 	testCases := []struct {
 		topology               CPUTopology
 		requestedSocketsNumber int
@@ -59,7 +60,7 @@ func TestGetSocketsNumber(t *testing.T) {
 	}
 }
 
-func TestGetSockets(t *testing.T) {
+func TestCPUTopology_GetSocket(t *testing.T) {
 	testCases := []struct {
 		requestedCPUs   []CPU
 		requestedSocket int
@@ -94,7 +95,7 @@ func TestGetSockets(t *testing.T) {
 	}
 }
 
-func TestGetCore(t *testing.T) {
+func TestCPUTopology_GetCore(t *testing.T) {
 	testCases := []struct {
 		requestedCPUs   []CPU
 		requestedCore   int
@@ -129,7 +130,7 @@ func TestGetCore(t *testing.T) {
 	}
 }
 
-func TestGetCPU(t *testing.T) {
+func TestCPUTopology_GetCPU(t *testing.T) {
 	testCases := []struct {
 		requestedCPUs *CPU
 		requestedCPU  int
@@ -154,7 +155,7 @@ func TestGetCPU(t *testing.T) {
 	}
 }
 
-func TestReserveCPU(t *testing.T) {
+func TestCPUTopology_Reserve(t *testing.T) {
 	topology := CPUTopology{
 		CPU: []CPU{
 			{SocketID: 0, CPUID: 0, CoreID: 0},
@@ -169,7 +170,7 @@ func TestReserveCPU(t *testing.T) {
 	assert.NotNil(t, err)
 }
 
-func TestReclaimCPU(t *testing.T) {
+func TestCPUTopology_Reclaim(t *testing.T) {
 	topology := CPUTopology{
 		CPU: []CPU{
 			{SocketID: 0, CPUID: 0, CoreID: 0, IsInUse: true},
@@ -180,4 +181,78 @@ func TestReclaimCPU(t *testing.T) {
 
 	topology.Reclaim(0)
 	assert.False(t, cpu.IsInUse)
+}
+
+func TestCPUTopology_GetTotalCPUs(t *testing.T) {
+	testCases := []struct {
+		cpuTopology   *CPUTopology
+		expectedTotal int
+	}{
+		{
+			cpuTopology:   &CPUTopology{},
+			expectedTotal: 0,
+		},
+		{
+			cpuTopology:   &TOPOLOGY,
+			expectedTotal: 8,
+		},
+	}
+	for _, testCase := range testCases {
+		if testCase.cpuTopology.GetTotalCPUs() != testCase.expectedTotal {
+			t.Errorf("Expected number of CPUs (%q) isn't expected number (%q)",
+				testCase.cpuTopology.GetTotalCPUs(), testCase.expectedTotal)
+		}
+	}
+
+}
+
+func TestCPUTopology_GetAvailableCPUs(t *testing.T) {
+	testCases := []struct {
+		cpuTopology   *CPUTopology
+		availableCPUs []CPU
+	}{
+		{
+			cpuTopology: &CPUTopology{
+				CPU: []CPU{
+					{SocketID: 0, CoreID: 0, CPUID: 0},
+					{SocketID: 0, CoreID: 1, CPUID: 1, IsInUse: true},
+					{SocketID: 0, CoreID: 0, CPUID: 2},
+					{SocketID: 0, CoreID: 1, CPUID: 3, IsInUse: true},
+					{SocketID: 1, CoreID: 0, CPUID: 4},
+					{SocketID: 1, CoreID: 1, CPUID: 5, IsInUse: true},
+					{SocketID: 1, CoreID: 0, CPUID: 6},
+					{SocketID: 1, CoreID: 1, CPUID: 7, IsInUse: true},
+				},
+			},
+			availableCPUs: []CPU{
+				{SocketID: 0, CoreID: 0, CPUID: 0},
+				{SocketID: 0, CoreID: 0, CPUID: 2},
+				{SocketID: 1, CoreID: 0, CPUID: 4},
+				{SocketID: 1, CoreID: 0, CPUID: 6},
+			},
+		},
+		{
+			cpuTopology: &CPUTopology{
+				CPU: []CPU{
+					{SocketID: 0, CoreID: 1, CPUID: 1, IsInUse: true},
+					{SocketID: 0, CoreID: 1, CPUID: 3, IsInUse: true},
+					{SocketID: 1, CoreID: 1, CPUID: 5, IsInUse: true},
+					{SocketID: 1, CoreID: 1, CPUID: 7, IsInUse: true},
+				},
+			},
+			availableCPUs: []CPU{},
+		},
+		{
+			cpuTopology: &CPUTopology{
+				CPU: []CPU{},
+			},
+			availableCPUs: []CPU{},
+		},
+	}
+
+	for _, testCase := range testCases {
+		if !reflect.DeepEqual(testCase.cpuTopology.GetAvailableCPUs(), testCase.availableCPUs) {
+			t.Error("Requested number of CPUs doesn't match expected one")
+		}
+	}
 }
