@@ -307,14 +307,14 @@ func ResourceConfigFromReply(reply *lifecycle.EventReply, resources *ResourceCon
 
 // Updates the supplied container config in-place based on the isolation
 // controls in the event reply.
-func UpdateContainerConfigWithReply(reply *lifecycle.EventReply, config *runtime.ContainerConfig) {
+func UpdateContainerConfigWithReply(reply *lifecycle.EventReply, config *runtime.ContainerConfig) *runtime.ContainerConfig {
 	if reply == nil {
 		glog.Info("eventDispatcherNoop has been detected - skipping container configuration update")
-		return
+		return config
 	}
 	if reply.Error != "" {
 		glog.Errorf("isolator returned error: %s", reply.Error)
-		return
+		return config
 	}
 
 	updatedConfig := &runtime.ContainerConfig{}
@@ -326,7 +326,7 @@ func UpdateContainerConfigWithReply(reply *lifecycle.EventReply, config *runtime
 		case lifecycle.IsolationControl_CONTAINER_ENV_VAR:
 			for k, v := range control.MapValue {
 				entry := &runtime.KeyValue{Key: k, Value: v}
-				config.Envs = append(updatedConfig.Envs, entry)
+				updatedConfig.Envs = append(updatedConfig.Envs, entry)
 			}
 		default:
 			continue
@@ -335,7 +335,7 @@ func UpdateContainerConfigWithReply(reply *lifecycle.EventReply, config *runtime
 
 	if updatedConfig.Linux == nil {
 		glog.Infof("skipping Linux-only isolation settings")
-		return
+		return updatedConfig
 	}
 
 	// Apply linux-specific settings to container config.
@@ -347,9 +347,9 @@ func UpdateContainerConfigWithReply(reply *lifecycle.EventReply, config *runtime
 			updatedConfig.Linux.Resources.CpusetMems = control.Value
 		default:
 			glog.Infof("encountered unknown isolation control kind: [%d]", control.Kind)
-			continue
 		}
 	}
+	return updatedConfig
 }
 
 func (ed *eventDispatcher) isolator(name string) *registeredIsolator {

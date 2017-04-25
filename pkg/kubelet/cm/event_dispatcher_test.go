@@ -658,7 +658,7 @@ func TestUpdateContainerConfigWithReply(t *testing.T) {
 			IsolationControls: testCase.isolationControls,
 		}
 
-		UpdateContainerConfigWithReply(reply, config)
+		config = UpdateContainerConfigWithReply(reply, config)
 		if !reflect.DeepEqual(config.Envs, testCase.expectedEnvs) {
 			t.Errorf("Obtained envs (%q) are not expected one (%q)",
 				config.Envs, testCase.expectedEnvs)
