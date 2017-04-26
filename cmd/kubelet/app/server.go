@@ -323,7 +323,7 @@ func validateConfig(s *options.KubeletServer) error {
 		if len(s.EnforceNodeAllocatable) > 0 {
 			return fmt.Errorf("Node Allocatable enforcement is not supported unless Cgroups Per QOS feature is turned on")
 		}
-		if s.EnableExtendedIsolation{
+		if s.EnableExtendedIsolation {
 			return fmt.Errorf("Extended Isolation is not supported unless Cgroups Per QOS feature is turned on")
 		}
 	}
@@ -540,16 +540,16 @@ func run(s *options.KubeletServer, kubeDeps *kubelet.KubeletDeps) (err error) {
 			kubeDeps.Mounter,
 			kubeDeps.CAdvisorInterface,
 			cm.NodeConfig{
-				RuntimeCgroupsName:        s.RuntimeCgroups,
-				SystemCgroupsName:         s.SystemCgroups,
-				KubeletCgroupsName:        s.KubeletCgroups,
-				ContainerRuntime:          s.ContainerRuntime,
-				CgroupsPerQOS:             s.CgroupsPerQOS,
-				CgroupRoot:                s.CgroupRoot,
-				CgroupDriver:              s.CgroupDriver,
-				EnableExtendedIsolation:   s.EnableExtendedIsolation,
-				ProtectKernelDefaults:     s.ProtectKernelDefaults,
-				EnableCRI:                 s.EnableCRI,
+				RuntimeCgroupsName:      s.RuntimeCgroups,
+				SystemCgroupsName:       s.SystemCgroups,
+				KubeletCgroupsName:      s.KubeletCgroups,
+				ContainerRuntime:        s.ContainerRuntime,
+				CgroupsPerQOS:           s.CgroupsPerQOS,
+				CgroupRoot:              s.CgroupRoot,
+				CgroupDriver:            s.CgroupDriver,
+				EnableExtendedIsolation: s.EnableExtendedIsolation,
+				ProtectKernelDefaults:   s.ProtectKernelDefaults,
+				EnableCRI:               s.EnableCRI,
 				NodeAllocatableConfig: cm.NodeAllocatableConfig{
 					KubeReservedCgroupName:   s.KubeReservedCgroup,
 					SystemReservedCgroupName: s.SystemReservedCgroup,
