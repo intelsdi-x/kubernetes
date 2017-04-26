@@ -280,45 +280,48 @@ func (ed *eventDispatcher) Unregister(ctx context.Context, request *lifecycle.Un
 	return &lifecycle.UnregisterReply{}, nil
 }
 
+func eventReplyValidator(reply *lifecycle.EventReply) (bool, error) {
+	if reply == nil {
+		glog.Info("eventDispatcherNoop has been detected - skipping container configuration update")
+		return false, nil
+	}
+	if reply.Error != "" {
+		return false, fmt.Errorf("isolator has returned error: %s", reply.Error)
+	}
+	return true, nil
+}
+
 // Returns a pointer to an updated copy of the supplied resource config,
 // based on the isolation controls in the event reply. The original resource
 // config is not updated in-place.
-func ResourceConfigFromReply(reply *lifecycle.EventReply, resources *ResourceConfig) *ResourceConfig {
-	// This is a safe copy; ResourceConfig contains only pointers to primitives.
-	updatedResources := &ResourceConfig{}
-	*updatedResources = *resources
+func ResourceConfigFromReply(reply *lifecycle.EventReply, resources *ResourceConfig) error {
+	if ok, err := eventReplyValidator(reply); !ok {
+		return err
+	}
 
 	for _, control := range reply.IsolationControls {
 		switch control.Kind {
 		case lifecycle.IsolationControl_CGROUP_CPUSET_CPUS:
-			updatedResources.CpusetCpus = &control.Value
+			resources.CpusetCpus = &control.Value
 		case lifecycle.IsolationControl_CGROUP_CPUSET_MEMS:
-			updatedResources.CpusetMems = &control.Value
+			resources.CpusetMems = &control.Value
 		case lifecycle.IsolationControl_CGROUP_HUGETLB_LIMIT:
 			//Append is used to cover case where there are multiple separate isolators, each for different
 			//page size. In case of conflicting replies, tha last one applied will "win"
-			updatedResources.HugetlbLimit = append(updatedResources.HugetlbLimit, hugePageLimitsFromIsolationControl(control)...)
+			resources.HugetlbLimit = append(resources.HugetlbLimit, hugePageLimitsFromIsolationControl(control)...)
 		default:
 			glog.Warningf("ignoring unknown isolation control kind [%s]", control.Kind)
 		}
 	}
-	return updatedResources
+	return nil
 }
 
 // Updates the supplied container config in-place based on the isolation
 // controls in the event reply.
-func UpdateContainerConfigWithReply(reply *lifecycle.EventReply, config *runtime.ContainerConfig) *runtime.ContainerConfig {
-	if reply == nil {
-		glog.Info("eventDispatcherNoop has been detected - skipping container configuration update")
-		return config
+func UpdateContainerConfigWithReply(reply *lifecycle.EventReply, config *runtime.ContainerConfig) error {
+	if ok, err := eventReplyValidator(reply); !ok {
+		return err
 	}
-	if reply.Error != "" {
-		glog.Errorf("isolator returned error: %s", reply.Error)
-		return config
-	}
-
-	updatedConfig := &runtime.ContainerConfig{}
-	*updatedConfig = *config
 
 	// Append environment variables to container config.
 	for _, control := range reply.IsolationControls {
@@ -326,30 +329,30 @@ func UpdateContainerConfigWithReply(reply *lifecycle.EventReply, config *runtime
 		case lifecycle.IsolationControl_CONTAINER_ENV_VAR:
 			for k, v := range control.MapValue {
 				entry := &runtime.KeyValue{Key: k, Value: v}
-				updatedConfig.Envs = append(updatedConfig.Envs, entry)
+				config.Envs = append(config.Envs, entry)
 			}
 		default:
 			continue
 		}
 	}
 
-	if updatedConfig.Linux == nil {
+	if config.Linux == nil {
 		glog.Infof("skipping Linux-only isolation settings")
-		return updatedConfig
+		return nil
 	}
 
 	// Apply linux-specific settings to container config.
 	for _, control := range reply.IsolationControls {
 		switch control.Kind {
 		case lifecycle.IsolationControl_CGROUP_CPUSET_CPUS:
-			updatedConfig.Linux.Resources.CpusetCpus = control.Value
+			config.Linux.Resources.CpusetCpus = control.Value
 		case lifecycle.IsolationControl_CGROUP_CPUSET_MEMS:
-			updatedConfig.Linux.Resources.CpusetMems = control.Value
+			config.Linux.Resources.CpusetMems = control.Value
 		default:
 			glog.Infof("encountered unknown isolation control kind: [%d]", control.Kind)
 		}
 	}
-	return updatedConfig
+	return nil
 }
 
 func (ed *eventDispatcher) isolator(name string) *registeredIsolator {

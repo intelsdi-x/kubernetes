@@ -465,8 +465,9 @@ func TestEventDispatcher_PostStopContainer(t *testing.T) {
 
 func TestResourceConfigFromReplies(t *testing.T) {
 	testCases := []struct {
-		isolators []*lifecycle.IsolationControl
-		resources map[string]string
+		isolators  []*lifecycle.IsolationControl
+		resources  map[string]string
+		replyError string
 	}{
 		{
 			isolators: []*lifecycle.IsolationControl{
@@ -478,6 +479,7 @@ func TestResourceConfigFromReplies(t *testing.T) {
 			resources: map[string]string{
 				"CpusetCpus": "5",
 			},
+			replyError: "",
 		},
 		{
 			isolators: []*lifecycle.IsolationControl{
@@ -498,6 +500,7 @@ func TestResourceConfigFromReplies(t *testing.T) {
 				"CpusetCpus": "2",
 				"CpusetMems": "3",
 			},
+			replyError: "",
 		},
 		{
 			isolators: []*lifecycle.IsolationControl{
@@ -518,15 +521,25 @@ func TestResourceConfigFromReplies(t *testing.T) {
 				"CpusetCpus": "2",
 				"CpusetMems": "3",
 			},
+			replyError: "",
+		},
+		{
+			replyError: "foo",
 		},
 	}
 
 	for _, testCase := range testCases {
 		eventReply := &lifecycle.EventReply{
 			IsolationControls: testCase.isolators,
+			Error:             testCase.replyError,
 		}
-		output := ResourceConfigFromReply(eventReply, &ResourceConfig{})
-		reflectedStruct := reflect.ValueOf(output)
+		config := &ResourceConfig{}
+
+		err := ResourceConfigFromReply(eventReply, config)
+		if (testCase.replyError != "") && (err == nil) {
+			t.Errorf("Unexpected function output")
+		}
+		reflectedStruct := reflect.ValueOf(config)
 		for key, value := range testCase.resources {
 			data := reflect.Indirect(reflectedStruct).FieldByName(key).Interface().(*string)
 			if *data != value {
@@ -542,11 +555,12 @@ func TestResourceConfigFromReplies(t *testing.T) {
 func TestUpdateContainerConfigWithReply(t *testing.T) {
 
 	testCases := []struct {
-		isolationControls []*lifecycle.IsolationControl
-		passedEnvs        []*runtime.KeyValue
-		linuxContainerRes *runtime.LinuxContainerResources
 		expectedEnvs      []*runtime.KeyValue
 		expectedResources map[string]string
+		isolationControls []*lifecycle.IsolationControl
+		linuxContainerRes *runtime.LinuxContainerResources
+		passedEnvs        []*runtime.KeyValue
+		replyError        string
 	}{
 		{
 			isolationControls: []*lifecycle.IsolationControl{
@@ -577,6 +591,7 @@ func TestUpdateContainerConfigWithReply(t *testing.T) {
 				"CpusetCpus": "1",
 				"CpusetMems": "5",
 			},
+			replyError: "",
 		},
 		{
 			isolationControls: []*lifecycle.IsolationControl{
@@ -611,6 +626,7 @@ func TestUpdateContainerConfigWithReply(t *testing.T) {
 			expectedResources: map[string]string{
 				"CpusetMems": "7",
 			},
+			replyError: "",
 		},
 		{
 			isolationControls: []*lifecycle.IsolationControl{
@@ -641,6 +657,10 @@ func TestUpdateContainerConfigWithReply(t *testing.T) {
 					Value: "bar",
 				},
 			},
+			replyError: "",
+		},
+		{
+			replyError: "foo",
 		},
 	}
 
@@ -656,9 +676,14 @@ func TestUpdateContainerConfigWithReply(t *testing.T) {
 
 		reply := &lifecycle.EventReply{
 			IsolationControls: testCase.isolationControls,
+			Error:             testCase.replyError,
 		}
 
-		config = UpdateContainerConfigWithReply(reply, config)
+		err := UpdateContainerConfigWithReply(reply, config)
+		if (testCase.replyError != "") && (err == nil) {
+			t.Errorf("Unexpected function output")
+		}
+
 		if !reflect.DeepEqual(config.Envs, testCase.expectedEnvs) {
 			t.Errorf("Obtained envs (%q) are not expected one (%q)",
 				config.Envs, testCase.expectedEnvs)

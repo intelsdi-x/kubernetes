@@ -87,7 +87,9 @@ func (m *kubeGenericRuntimeManager) startContainer(podSandboxID string, podSandb
 	}
 
 	// Apply aggregated isolator responses to the container create config.
-	containerConfig = containermanager.UpdateContainerConfigWithReply(eventReply, containerConfig)
+	if err := containermanager.UpdateContainerConfigWithReply(eventReply, containerConfig); err != nil {
+		return "", fmt.Errorf("failed to apply cgroupResources to existing containerConfig: %q", err.Error())
+	}
 
 	containerID, err := m.runtimeService.CreateContainer(podSandboxID, containerConfig, podSandboxConfig)
 	if err != nil {
