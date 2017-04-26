@@ -465,9 +465,10 @@ func TestEventDispatcher_PostStopContainer(t *testing.T) {
 
 func TestResourceConfigFromReplies(t *testing.T) {
 	testCases := []struct {
-		isolators  []*lifecycle.IsolationControl
-		resources  map[string]string
-		replyError string
+		isNoopDispatcher bool
+		isolators        []*lifecycle.IsolationControl
+		resources        map[string]string
+		replyError       string
 	}{
 		{
 			isolators: []*lifecycle.IsolationControl{
@@ -526,18 +527,25 @@ func TestResourceConfigFromReplies(t *testing.T) {
 		{
 			replyError: "foo",
 		},
+		{
+			isNoopDispatcher: true,
+		},
 	}
 
 	for _, testCase := range testCases {
-		eventReply := &lifecycle.EventReply{
-			IsolationControls: testCase.isolators,
-			Error:             testCase.replyError,
+		var reply *lifecycle.EventReply
+		if !testCase.isNoopDispatcher {
+			reply = &lifecycle.EventReply{
+				IsolationControls: testCase.isolators,
+				Error:             testCase.replyError,
+			}
 		}
+
 		config := &ResourceConfig{}
 
-		err := ResourceConfigFromReply(eventReply, config)
+		err := UpdateResourceConfigWithReply(reply, config)
 		if (testCase.replyError != "") && (err == nil) {
-			t.Errorf("Unexpected function output")
+			t.Error("Unexpected function output")
 		}
 		reflectedStruct := reflect.ValueOf(config)
 		for key, value := range testCase.resources {
@@ -557,12 +565,23 @@ func TestUpdateContainerConfigWithReply(t *testing.T) {
 	testCases := []struct {
 		expectedEnvs      []*runtime.KeyValue
 		expectedResources map[string]string
+		isNoopDispatcher  bool
 		isolationControls []*lifecycle.IsolationControl
 		linuxContainerRes *runtime.LinuxContainerResources
 		passedEnvs        []*runtime.KeyValue
 		replyError        string
 	}{
 		{
+			expectedEnvs: []*runtime.KeyValue{
+				{
+					Key:   "foo",
+					Value: "bar",
+				},
+			},
+			expectedResources: map[string]string{
+				"CpusetCpus": "1",
+				"CpusetMems": "5",
+			},
 			isolationControls: []*lifecycle.IsolationControl{
 				{
 					Kind:  lifecycle.IsolationControl_CGROUP_CPUSET_MEMS,
@@ -581,19 +600,22 @@ func TestUpdateContainerConfigWithReply(t *testing.T) {
 			},
 			linuxContainerRes: &runtime.LinuxContainerResources{},
 			passedEnvs:        []*runtime.KeyValue{},
+			replyError:        "",
+		},
+		{
 			expectedEnvs: []*runtime.KeyValue{
+				{
+					Key:   "bar",
+					Value: "foo",
+				},
 				{
 					Key:   "foo",
 					Value: "bar",
 				},
 			},
 			expectedResources: map[string]string{
-				"CpusetCpus": "1",
-				"CpusetMems": "5",
+				"CpusetMems": "7",
 			},
-			replyError: "",
-		},
-		{
 			isolationControls: []*lifecycle.IsolationControl{
 				{
 					Kind:  lifecycle.IsolationControl_CGROUP_CPUSET_MEMS,
@@ -613,6 +635,9 @@ func TestUpdateContainerConfigWithReply(t *testing.T) {
 					Value: "foo",
 				},
 			},
+			replyError: "",
+		},
+		{
 			expectedEnvs: []*runtime.KeyValue{
 				{
 					Key:   "bar",
@@ -623,12 +648,6 @@ func TestUpdateContainerConfigWithReply(t *testing.T) {
 					Value: "bar",
 				},
 			},
-			expectedResources: map[string]string{
-				"CpusetMems": "7",
-			},
-			replyError: "",
-		},
-		{
 			isolationControls: []*lifecycle.IsolationControl{
 				{
 					Kind:  lifecycle.IsolationControl_CGROUP_CPUSET_MEMS,
@@ -647,20 +666,13 @@ func TestUpdateContainerConfigWithReply(t *testing.T) {
 					Value: "foo",
 				},
 			},
-			expectedEnvs: []*runtime.KeyValue{
-				{
-					Key:   "bar",
-					Value: "foo",
-				},
-				{
-					Key:   "foo",
-					Value: "bar",
-				},
-			},
 			replyError: "",
 		},
 		{
 			replyError: "foo",
+		},
+		{
+			isNoopDispatcher: true,
 		},
 	}
 
@@ -674,14 +686,17 @@ func TestUpdateContainerConfigWithReply(t *testing.T) {
 			}
 		}
 
-		reply := &lifecycle.EventReply{
-			IsolationControls: testCase.isolationControls,
-			Error:             testCase.replyError,
+		var reply *lifecycle.EventReply
+		if !testCase.isNoopDispatcher {
+			reply = &lifecycle.EventReply{
+				IsolationControls: testCase.isolationControls,
+				Error:             testCase.replyError,
+			}
 		}
 
 		err := UpdateContainerConfigWithReply(reply, config)
 		if (testCase.replyError != "") && (err == nil) {
-			t.Errorf("Unexpected function output")
+			t.Error("Unexpected function output")
 		}
 
 		if !reflect.DeepEqual(config.Envs, testCase.expectedEnvs) {

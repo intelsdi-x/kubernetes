@@ -280,7 +280,7 @@ func (ed *eventDispatcher) Unregister(ctx context.Context, request *lifecycle.Un
 	return &lifecycle.UnregisterReply{}, nil
 }
 
-func eventReplyValidator(reply *lifecycle.EventReply) (bool, error) {
+func isEventReplyValid(reply *lifecycle.EventReply) (bool, error) {
 	if reply == nil {
 		glog.Info("eventDispatcherNoop has been detected - skipping container configuration update")
 		return false, nil
@@ -291,11 +291,9 @@ func eventReplyValidator(reply *lifecycle.EventReply) (bool, error) {
 	return true, nil
 }
 
-// Returns a pointer to an updated copy of the supplied resource config,
-// based on the isolation controls in the event reply. The original resource
-// config is not updated in-place.
-func ResourceConfigFromReply(reply *lifecycle.EventReply, resources *ResourceConfig) error {
-	if ok, err := eventReplyValidator(reply); !ok {
+// Updates the supplied resource config in-plased based on the isolation controls in the event reply.
+func UpdateResourceConfigWithReply(reply *lifecycle.EventReply, resources *ResourceConfig) error {
+	if ok, err := isEventReplyValid(reply); !ok {
 		return err
 	}
 
@@ -319,7 +317,7 @@ func ResourceConfigFromReply(reply *lifecycle.EventReply, resources *ResourceCon
 // Updates the supplied container config in-place based on the isolation
 // controls in the event reply.
 func UpdateContainerConfigWithReply(reply *lifecycle.EventReply, config *runtime.ContainerConfig) error {
-	if ok, err := eventReplyValidator(reply); !ok {
+	if ok, err := isEventReplyValid(reply); !ok {
 		return err
 	}
 
