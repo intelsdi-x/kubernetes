@@ -280,16 +280,19 @@ func (ed *eventDispatcher) Unregister(ctx context.Context, request *lifecycle.Un
 	return &lifecycle.UnregisterReply{}, nil
 }
 
-func isEventReplyValid(reply *lifecycle.EventReply) (bool, error) {
-	if reply.Error != "" {
-		return false, fmt.Errorf("isolator has returned error: %s", reply.Error)
+func isEventReplyValid(reply *lifecycle.EventReply) error {
+	if reply == nil {
+		return fmt.Errorf("nil EvenReply has been recieved")
 	}
-	return true, nil
+	if reply.Error != "" {
+		return fmt.Errorf("isolator has returned error: %s", reply.Error)
+	}
+	return nil
 }
 
 // Updates the supplied resource config in-placed based on the isolation controls in the event reply.
 func UpdateResourceConfigWithReply(reply *lifecycle.EventReply, resources *ResourceConfig) error {
-	if ok, err := isEventReplyValid(reply); !ok {
+	if err := isEventReplyValid(reply); err != nil {
 		return err
 	}
 
@@ -313,7 +316,7 @@ func UpdateResourceConfigWithReply(reply *lifecycle.EventReply, resources *Resou
 // Updates the supplied container config in-place based on the isolation
 // controls in the event reply.
 func UpdateContainerConfigWithReply(reply *lifecycle.EventReply, config *runtime.ContainerConfig) error {
-	if ok, err := isEventReplyValid(reply); !ok {
+	if err := isEventReplyValid(reply); err != nil {
 		return err
 	}
 
