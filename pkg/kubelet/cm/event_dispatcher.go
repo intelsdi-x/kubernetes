@@ -281,17 +281,13 @@ func (ed *eventDispatcher) Unregister(ctx context.Context, request *lifecycle.Un
 }
 
 func isEventReplyValid(reply *lifecycle.EventReply) (bool, error) {
-	if reply == nil {
-		glog.Info("eventDispatcherNoop has been detected - skipping container configuration update")
-		return false, nil
-	}
 	if reply.Error != "" {
 		return false, fmt.Errorf("isolator has returned error: %s", reply.Error)
 	}
 	return true, nil
 }
 
-// Updates the supplied resource config in-plased based on the isolation controls in the event reply.
+// Updates the supplied resource config in-placed based on the isolation controls in the event reply.
 func UpdateResourceConfigWithReply(reply *lifecycle.EventReply, resources *ResourceConfig) error {
 	if ok, err := isEventReplyValid(reply); !ok {
 		return err
@@ -394,7 +390,7 @@ type eventDispatcherNoop struct {
 var _ EventDispatcher = &eventDispatcherNoop{}
 
 func (ed *eventDispatcherNoop) PreStartPod(pod *v1.Pod, cgroupPath string) (*lifecycle.EventReply, error) {
-	return nil, nil
+	return &lifecycle.EventReply{}, nil
 }
 
 func (ed *eventDispatcherNoop) PostStopPod(cgroupPath string) error {
@@ -402,7 +398,7 @@ func (ed *eventDispatcherNoop) PostStopPod(cgroupPath string) error {
 }
 
 func (ed *eventDispatcherNoop) PreStartContainer(podName, containerName string) (*lifecycle.EventReply, error) {
-	return nil, nil
+	return &lifecycle.EventReply{}, nil
 }
 
 func (ed *eventDispatcherNoop) PostStopContainer(podName, containerName string) error {
@@ -410,7 +406,7 @@ func (ed *eventDispatcherNoop) PostStopContainer(podName, containerName string) 
 }
 
 func (ed *eventDispatcherNoop) Start(socketAddress string) {
-
+	glog.Info("Using eventDispatcherNoop")
 }
 
 func (ed *eventDispatcherNoop) GetEventChannel() chan EventDispatcherEvent {

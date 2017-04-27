@@ -26,6 +26,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	ctx "golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"k8s.io/kubernetes/pkg/api/v1"
@@ -114,21 +115,21 @@ func TestEventDispatcherNoop(t *testing.T) {
 	ed := eventDispatcherNoop{}
 	ed.Start(":0")
 
-	if ed.PostStopPod("/") != nil {
-		t.Error("PostStopPod for EventDispatcherNoop shouldn't return anything")
-	}
-	if reply, err := ed.PreStartPod(&v1.Pod{}, "/"); reply != nil || err != nil {
-		t.Error("PreStartPod for EventDispatcherNoop shouldn't return anything")
-	}
-	if ed.GetEventChannel() != nil {
-		t.Error("GetEventChannel for EventDispatcherNoop shouldn't return anything")
-	}
-	if ed.PostStopContainer("", "") != nil {
-		t.Error("PostStopContainer for EventDispatcherNoop shouldn't return anything")
-	}
-	if reply, err := ed.PreStartContainer("", ""); reply != nil || err != nil {
-		t.Error("PreStartContainer for EventDispatcherNoop shouldn't return anything")
-	}
+	assert.Nil(t, ed.GetEventChannel())
+
+	assert.Nil(t, ed.PostStopPod("/"))
+	reply, err := ed.PreStartPod(&v1.Pod{}, "/")
+	assert.Nil(t, err)
+	assert.EqualValues(t, &lifecycle.EventReply{}, reply)
+
+	reply, err = ed.PreStartPod(&v1.Pod{}, "/")
+	assert.Nil(t, err)
+	assert.EqualValues(t, &lifecycle.EventReply{}, reply)
+
+	reply, err = ed.PreStartContainer("", "")
+	assert.Nil(t, err)
+	assert.EqualValues(t, &lifecycle.EventReply{}, reply)
+	assert.Nil(t, ed.PostStopContainer("", ""))
 }
 
 func TestEventDispatcher_Register(t *testing.T) {
@@ -533,7 +534,7 @@ func TestResourceConfigFromReplies(t *testing.T) {
 	}
 
 	for _, testCase := range testCases {
-		var reply *lifecycle.EventReply
+		reply := &lifecycle.EventReply{}
 		if !testCase.isNoopDispatcher {
 			reply = &lifecycle.EventReply{
 				IsolationControls: testCase.isolators,
@@ -544,8 +545,8 @@ func TestResourceConfigFromReplies(t *testing.T) {
 		config := &ResourceConfig{}
 
 		err := UpdateResourceConfigWithReply(reply, config)
-		if (testCase.replyError != "") && (err == nil) {
-			t.Error("Unexpected function output")
+		if testCase.replyError != "" {
+			assert.NotNil(t, err)
 		}
 		reflectedStruct := reflect.ValueOf(config)
 		for key, value := range testCase.resources {
@@ -686,7 +687,7 @@ func TestUpdateContainerConfigWithReply(t *testing.T) {
 			}
 		}
 
-		var reply *lifecycle.EventReply
+		reply := &lifecycle.EventReply{}
 		if !testCase.isNoopDispatcher {
 			reply = &lifecycle.EventReply{
 				IsolationControls: testCase.isolationControls,
@@ -695,14 +696,11 @@ func TestUpdateContainerConfigWithReply(t *testing.T) {
 		}
 
 		err := UpdateContainerConfigWithReply(reply, config)
-		if (testCase.replyError != "") && (err == nil) {
-			t.Error("Unexpected function output")
+		if testCase.replyError != "" {
+			assert.NotNil(t, err)
 		}
 
-		if !reflect.DeepEqual(config.Envs, testCase.expectedEnvs) {
-			t.Errorf("Obtained envs (%q) are not expected one (%q)",
-				config.Envs, testCase.expectedEnvs)
-		}
+		assert.EqualValues(t, testCase.expectedEnvs, config.Envs)
 
 		if testCase.linuxContainerRes != nil {
 			reflectedStruct := reflect.ValueOf(config.Linux.Resources)
