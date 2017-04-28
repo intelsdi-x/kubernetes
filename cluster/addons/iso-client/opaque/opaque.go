@@ -47,9 +47,13 @@ func toRequestBody(patchStruct patchOperation) ([]byte, error) {
 	)
 }
 
-// TODO: check if kubelet is overriding hostname and return it instead
 func getNode() (string, error) {
-	return os.Hostname()
+	var err error
+	nodeName := os.Getenv("NODE_NAME")
+	if nodeName == "" {
+		nodeName, err = os.Hostname()
+	}
+	return nodeName, err
 }
 
 // Escape forward slashes in the resource name per the JSON Pointer spec.
