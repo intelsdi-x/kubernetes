@@ -1,7 +1,7 @@
 apiVersion: extensions/v1beta1
 kind: DaemonSet
 metadata:
-  name: coreaffinity-isolator
+  name: cpuset-isolator
   namespace: kube-system
 spec:
   template:
@@ -16,8 +16,14 @@ spec:
         - -v
         - "4"
         - -logtostderr
-        image: iso-client:latest
-        name: iso-client
+        image: cpuset-isolator:latest
+        imagePullPolicy: IfNotPresent
+        name: cpuset-isolator
+        env:
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
         resources:
           requests:
             cpu: 250m

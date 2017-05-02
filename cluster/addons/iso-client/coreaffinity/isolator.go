@@ -20,7 +20,6 @@ import (
 	"flag"
 
 	"github.com/golang/glog"
-	"k8s.io/kubernetes/cluster/addons/iso-client/coreaffinity"
 	"k8s.io/kubernetes/cluster/addons/iso-client/isolator"
 )
 
@@ -33,7 +32,6 @@ const (
 	name = "cgroup-cpuset-cpus"
 )
 
-// TODO: split it to smaller functions
 func main() {
 	// enable logging to STDERR
 	flag.Set("logtostderr", "true")
@@ -41,7 +39,7 @@ func main() {
 	glog.Info("Starting ...")
 
 	// creating proper isolator
-	coreaffinityIsolator, err := coreaffinity.New(name)
+	coreaffinityIsolator, err := New(name)
 	if err != nil {
 		glog.Fatalf("Cannot create coreaffinity isolator: %q", err)
 	}

@@ -13,7 +13,7 @@
 # limitations under the License.
 
 ifeq ($(IMAGE_NAME),)
-IMAGE_NAME:=cgroup-cpuset-cpus-isolator
+IMAGE_NAME:=cpuset-isolator
 endif
 
 all: binary docker
