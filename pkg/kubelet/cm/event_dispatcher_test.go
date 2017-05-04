@@ -202,8 +202,13 @@ func TestEventDispatcher_Register(t *testing.T) {
 
 		for _, req := range testCase.registrationEvents {
 			var registrationEvent EventDispatcherEvent
-			go getIsolators(ed.GetEventChannel(), &registrationEvent)
+			isIsolatorRegistered := make(chan bool)
+			go func() {
+				getIsolators(ed.GetEventChannel(), &registrationEvent)
+				isIsolatorRegistered <- true
+			}()
 			ed.Register(context.Background(), req)
+			<-isIsolatorRegistered
 
 			if registrationEvent.Type != ISOLATOR_LIST_CHANGED {
 				t.Error("Event type is different than expected one")
