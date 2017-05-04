@@ -39,6 +39,7 @@ type EventDispatcherEventType int
 
 const (
 	ISOLATOR_LIST_CHANGED EventDispatcherEventType = iota
+	ISOLATOR_LIST_NOTCHANGED
 )
 
 type EventDispatcherEvent struct {
@@ -273,6 +274,10 @@ func (ed *eventDispatcher) Unregister(ctx context.Context, request *lifecycle.Un
 	if reg == nil {
 		msg := fmt.Sprintf("unregistration failed: no isolator named [%s] is currently registered.", request.Name)
 		glog.Warning(msg)
+		ed.eventChannel <- EventDispatcherEvent{
+			Type: ISOLATOR_LIST_NOTCHANGED,
+			Body: "",
+		}
 		return &lifecycle.UnregisterReply{Error: msg}, nil
 	}
 	delete(ed.isolators, request.Name)
