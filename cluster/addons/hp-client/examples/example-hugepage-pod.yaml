@@ -1,0 +1,19 @@
+kind: Pod
+apiVersion: v1
+metadata:
+  annotations:
+    pod.alpha.kubernetes.io/isolation-api: '{
+        "hugepage": "2MB"
+    }'
+  labels:
+    iso-resource: hugepage
+  name: nginxpod
+spec:
+  containers:
+  - name: nginxcontainer
+    image: si-docker.ir.intel.com/ssehgal/mmap
+    command: [ "/bin/bash", "-c", "--" ]
+    args: [ "while true; do sleep 300000; done;" ]
+    resources:
+      requests:
+        pod.alpha.kubernetes.io/opaque-int-resource-cgroup-hugetlb-limit: 3 

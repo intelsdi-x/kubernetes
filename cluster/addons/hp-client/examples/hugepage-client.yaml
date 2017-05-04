@@ -1,0 +1,19 @@
+apiVersion: extensions/v1beta1
+kind: DaemonSet
+metadata:
+  name: hugepage-isolator
+spec:
+  template:
+    metadata:
+      labels:
+        isolator: hugepage
+    spec:
+      containers:
+      - command:
+        - /hugepage-isolator
+        - -v
+        - "10"
+        - -logtostderr
+        image: si-docker.ir.intel.com/lmdaly/cgroup-hugepage-isolator
+        name: hugepage-iso
+      hostNetwork: true
