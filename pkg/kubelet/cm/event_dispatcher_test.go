@@ -241,8 +241,9 @@ func TestEventDispatcher_Unregister(t *testing.T) {
 	ed := GetEventDispatcherSingleton().(*eventDispatcher)
 
 	testCases := []struct {
-		isolators    []*lifecycle.UnregisterRequest
-		isolatorName string
+		isolators           []*lifecycle.UnregisterRequest
+		isolatorName        string
+		areIsolatorsChanged bool
 	}{
 		{
 			isolators: []*lifecycle.UnregisterRequest{
@@ -253,7 +254,8 @@ func TestEventDispatcher_Unregister(t *testing.T) {
 					Name: "test2",
 				},
 			},
-			isolatorName: "test1",
+			isolatorName:        "test1",
+			areIsolatorsChanged: true,
 		},
 		{
 			isolators: []*lifecycle.UnregisterRequest{
@@ -264,7 +266,8 @@ func TestEventDispatcher_Unregister(t *testing.T) {
 					Name: "test2",
 				},
 			},
-			isolatorName: "test3",
+			isolatorName:        "test3",
+			areIsolatorsChanged: false,
 		},
 		{
 			isolators: []*lifecycle.UnregisterRequest{
@@ -281,31 +284,47 @@ func TestEventDispatcher_Unregister(t *testing.T) {
 					Name: "test3",
 				},
 			},
-			isolatorName: "test2",
+			isolatorName:        "test2",
+			areIsolatorsChanged: true,
 		},
 		{
-			isolators:    []*lifecycle.UnregisterRequest{},
-			isolatorName: "test1",
+			isolators:           []*lifecycle.UnregisterRequest{},
+			isolatorName:        "test1",
+			areIsolatorsChanged: false,
 		},
 	}
 
 	for _, testCase := range testCases {
 		ed.isolators = make(map[string]*registeredIsolator)
 		for _, isolator := range testCase.isolators {
-			go getIsolators(ed.GetEventChannel(), &EventDispatcherEvent{})
+			isIsolatorRegistered := make(chan bool)
+
+			go func() {
+				getIsolators(ed.GetEventChannel(), &EventDispatcherEvent{})
+				isIsolatorRegistered <- true
+			}()
+
 			ed.Register(ctx.Background(), &lifecycle.RegisterRequest{
 				Name:          isolator.Name,
 				SocketAddress: "dummyIsolator address",
 			})
+			<-isIsolatorRegistered
 		}
+		isIsolatorUnregistered := make(chan bool)
 		var event EventDispatcherEvent
-		go getIsolators(ed.GetEventChannel(), &event)
+		go func() {
+			getIsolators(ed.GetEventChannel(), &event)
+			isIsolatorUnregistered <- true
+		}()
 		ed.Unregister(context.Background(), &lifecycle.UnregisterRequest{Name: testCase.isolatorName})
-		if ed.isolators[testCase.isolatorName] != nil {
-			t.Error("Unregistration failed: expected item to remove is still available")
-		}
-		if event.Type != ISOLATOR_LIST_CHANGED {
-			t.Error("Recieved event Kind wasn't expected one")
+		<-isIsolatorUnregistered
+
+		assert.Nil(t, ed.isolators[testCase.isolatorName])
+
+		if testCase.areIsolatorsChanged {
+			assert.Equal(t, ISOLATOR_LIST_CHANGED, event.Type)
+		} else {
+			assert.Equal(t, ISOLATOR_LIST_NOTCHANGED, event.Type)
 		}
 	}
 }

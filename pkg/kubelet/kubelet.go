@@ -1833,6 +1833,8 @@ func (kl *Kubelet) syncLoopIteration(configCh <-chan kubetypes.PodUpdate, handle
 			if err != nil {
 				glog.Errorf("unable to update list of registered isolators in node: %q", err.Error())
 			}
+		case cm.ISOLATOR_LIST_NOTCHANGED:
+			glog.Info("isolator list hasn't been changed")
 		}
 	case <-syncCh:
 		// Sync pods waiting for sync
