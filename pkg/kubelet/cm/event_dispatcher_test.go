@@ -241,9 +241,9 @@ func TestEventDispatcher_Unregister(t *testing.T) {
 	ed := GetEventDispatcherSingleton().(*eventDispatcher)
 
 	testCases := []struct {
-		isolators           []*lifecycle.UnregisterRequest
-		isolatorName        string
-		areIsolatorsChanged bool
+		isolators         []*lifecycle.UnregisterRequest
+		isolatorName      string
+		expectedReplyType EventDispatcherEventType
 	}{
 		{
 			isolators: []*lifecycle.UnregisterRequest{
@@ -254,8 +254,8 @@ func TestEventDispatcher_Unregister(t *testing.T) {
 					Name: "test2",
 				},
 			},
-			isolatorName:        "test1",
-			areIsolatorsChanged: true,
+			isolatorName:      "test1",
+			expectedReplyType: ISOLATOR_LIST_CHANGED,
 		},
 		{
 			isolators: []*lifecycle.UnregisterRequest{
@@ -266,8 +266,8 @@ func TestEventDispatcher_Unregister(t *testing.T) {
 					Name: "test2",
 				},
 			},
-			isolatorName:        "test3",
-			areIsolatorsChanged: false,
+			isolatorName:      "test3",
+			expectedReplyType: ISOLATOR_LIST_NOTCHANGED,
 		},
 		{
 			isolators: []*lifecycle.UnregisterRequest{
@@ -284,13 +284,13 @@ func TestEventDispatcher_Unregister(t *testing.T) {
 					Name: "test3",
 				},
 			},
-			isolatorName:        "test2",
-			areIsolatorsChanged: true,
+			isolatorName:      "test2",
+			expectedReplyType: ISOLATOR_LIST_CHANGED,
 		},
 		{
-			isolators:           []*lifecycle.UnregisterRequest{},
-			isolatorName:        "test1",
-			areIsolatorsChanged: false,
+			isolators:         []*lifecycle.UnregisterRequest{},
+			isolatorName:      "test1",
+			expectedReplyType: ISOLATOR_LIST_NOTCHANGED,
 		},
 	}
 
@@ -320,12 +320,7 @@ func TestEventDispatcher_Unregister(t *testing.T) {
 		<-isIsolatorUnregistered
 
 		assert.Nil(t, ed.isolators[testCase.isolatorName])
-
-		if testCase.areIsolatorsChanged {
-			assert.Equal(t, ISOLATOR_LIST_CHANGED, event.Type)
-		} else {
-			assert.Equal(t, ISOLATOR_LIST_NOTCHANGED, event.Type)
-		}
+		assert.Equal(t, testCase.expectedReplyType, event.Type)
 	}
 }
 
