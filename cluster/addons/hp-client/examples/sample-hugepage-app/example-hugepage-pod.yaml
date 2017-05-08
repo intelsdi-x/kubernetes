@@ -1,0 +1,17 @@
+kind: Pod
+apiVersion: v1
+metadata:
+  annotations:
+    pod.alpha.kubernetes.io/isolation-api: '{
+        "hugepage": "2MB"
+    }'
+  labels:
+    iso-resource: hugepage
+  name: hugepagePod
+spec:
+  containers:
+  - name: huggepageContainer
+    image: mmap
+    resources:
+      requests:
+        pod.alpha.kubernetes.io/opaque-int-resource-cgroup-hugetlb-limit: 3 

@@ -292,6 +292,7 @@ var supportedSubsystems = []subsystem{
 	&cgroupfs.MemoryGroup{},
 	&cgroupfs.CpuGroup{},
 	&cgroupfs.CpusetGroup{},
+	&cgroupfs.HugetlbGroup{},
 }
 
 // setSupportedSubsytems sets cgroup resource limits only on the supported
