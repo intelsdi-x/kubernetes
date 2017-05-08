@@ -14,6 +14,6 @@ spec:
         - -v
         - "10"
         - -logtostderr
-        image: si-docker.ir.intel.com/lmdaly/cgroup-hugepage-isolator
+        image: cgroup-hugepage-isolator
         name: hugepage-iso
       hostNetwork: true

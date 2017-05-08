@@ -7,13 +7,11 @@ metadata:
     }'
   labels:
     iso-resource: hugepage
-  name: nginxpod
+  name: hugepagePod
 spec:
   containers:
-  - name: nginxcontainer
-    image: si-docker.ir.intel.com/ssehgal/mmap
-    command: [ "/bin/bash", "-c", "--" ]
-    args: [ "while true; do sleep 300000; done;" ]
+  - name: huggepageContainer
+    image: mmap
     resources:
       requests:
         pod.alpha.kubernetes.io/opaque-int-resource-cgroup-hugetlb-limit: 3 

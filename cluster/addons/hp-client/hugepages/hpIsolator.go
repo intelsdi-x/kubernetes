@@ -57,20 +57,27 @@ func (h *hugepageIsolator) countHugepagesFromOIR(pod *v1.Pod) int64 {
         return hpAccu
 }
 
-func getHugepageSize(pod *v1.Pod) (string, error) {
-	glog.Infof("Inside getHugepageSize function Value of pod.Annotations is %v", pod.Annotations)
+func getAnnotationFromPod(pod *v1.Pod) (*isoSpec, error){
+	glog.Infof("Inside getAnnotationFromPod function Value of pod.Annotations is %v", pod.Annotations)
+	spec := &isoSpec{}
 	if pod.Annotations["pod.alpha.kubernetes.io/isolation-api"] != "" {
-		spec := &isoSpec{}
 		err := json.Unmarshal([]byte(pod.Annotations["pod.alpha.kubernetes.io/isolation-api"]), spec)
 		if err != nil {
 			glog.Fatalf("Cannot unmarshal isoSpec: %v", err)
-			return "", err
-		}
-		if spec.Hugepage != "" {
-			return spec.Hugepage, nil
+			return spec, err
 		}
 	}
-	return "2MB", nil
+	return spec, nil
+}
+
+func getHugepageSize(spec *isoSpec) (string) {
+	glog.Infof("Inside getHugepageSizefunction")
+	if spec != nil {
+		if spec.Hugepage != "" {
+			return spec.Hugepage
+		}
+	}
+	return "2MB"	
 }
 
 func convertHugepageSizetoInt(size string) (int64, error) {
@@ -93,6 +100,20 @@ func getHugepageTotalRequested(hpNum int64, hpSize int64) (hpTotalRequest int64)
 
 }
 
+func getHugepageMap(hpsize string, hpRequest string) (hugePageMapValue map[string]string) {
+	hugePageMapValue = make(map[string]string)
+	hugePageMapValue[hpsize] = hpRequest
+	
+	return 
+}
+
+func getCgroupResourceValue (hpsize string, hpRequest string) (string) {
+	cgroupResourceValue := fmt.Sprintf("%s,%s", hpsize, hpRequest)
+	glog.Infof("cgroupResourceValue returned to Event: %s", cgroupResourceValue)
+	
+	return cgroupResourceValue
+}
+
 func (h *hugepageIsolator) PreStartPod(podName string, containerName string, pod *v1.Pod, resource *lifecycle.CgroupInfo) ([]*lifecycle.IsolationControl, error) {
 	oirHugepages := h.countHugepagesFromOIR(pod)
 	glog.Infof("Pod %s requested %d hugepages", pod.Name, oirHugepages)
@@ -102,11 +123,12 @@ func (h *hugepageIsolator) PreStartPod(podName string, containerName string, pod
 		return []*lifecycle.IsolationControl{}, nil
 	}
 	
-	hugepageSize, err := getHugepageSize(pod)
-	if err != nil {
-		glog.Infof("Error: %v could not retrieve hugepage size from Pod %s", err, pod.Name)
-		return []*lifecycle.IsolationControl{}, err
+	recievedSpec, err := getAnnotationFromPod(pod)
+	if err != nil{
+		glog.Infof("Error: %v could not retrieve annotation from pod spec", err)
+		return []*lifecycle.IsolationControl{}, err	
 	}
+	hugepageSize := getHugepageSize(recievedSpec)
 	glog.Infof("Pod %s requested %s size hugepages", pod.Name, hugepageSize)
 	
 	hugepagesizeInt, err := convertHugepageSizetoInt(hugepageSize)
@@ -114,19 +136,10 @@ func (h *hugepageIsolator) PreStartPod(podName string, containerName string, pod
 		glog.Infof("Error: %v could not convert hugepagesize to int", err)
 		return []*lifecycle.IsolationControl{}, err	
 	}
-	
 	hpRequestBytes :=  getHugepageTotalRequested(oirHugepages, hugepagesizeInt)
-	glog.Infof("Hugepage request in bytes: %d", hpRequestBytes)
-	
 	hpRequestBytesString := strconv.FormatInt(hpRequestBytes, 10)
-	
-	cgroupResourceValue := fmt.Sprintf("%s,%s", hugepageSize, hpRequestBytesString)
-	glog.Infof("cgroupResourceValue returned to Event: %s", cgroupResourceValue)
-	
-	var hugePageMapValue map[string]string
-	hugePageMapValue = make(map[string]string)
-	hugePageMapValue[hugepageSize] = hpRequestBytesString
-	
+	cgroupResourceValue := getCgroupResourceValue(hugepageSize, hpRequestBytesString)
+	hugePageMapValue := getHugepageMap(hugepageSize, hpRequestBytesString)
 	cgroupResource := []*lifecycle.IsolationControl{
 		{
 			MapValue: hugePageMapValue,

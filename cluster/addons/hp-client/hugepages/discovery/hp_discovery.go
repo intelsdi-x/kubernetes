@@ -7,8 +7,8 @@ import (
 )
 
 func DiscoverHugepageNumber() (int, error) {
-        procFsPath := "/proc/sys/vm/nr_hugepages"
-        totalBytes, err := ioutil.ReadFile(procFsPath)
+        hugepageInfoPath := "/proc/sys/vm/nr_hugepages"
+        totalBytes, err := ioutil.ReadFile(hugepageInfoPath)
         if err != nil {
                 return -1, err
         }
@@ -19,4 +19,3 @@ func DiscoverHugepageNumber() (int, error) {
         }
         return hpTotalNum, nil
 }
-

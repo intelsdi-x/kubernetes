@@ -12,19 +12,18 @@ const (
 	// kubelet eventDispatcher address
 	eventDispatcherAddress = "localhost:5433"
 	// iso-client own address
-	isolatorLocalAddress = "localhost:5444"
+	isolatorLocalAddress = "localhost:5445"
 	// name of isolator
 	name = "cgroup-hugetlb-limit"
 )
 
-// TODO: split it to smaller functions
 func main() {
 	// enable logging to STDERR
 	flag.Set("logtostderr", "true")
 	flag.Parse()
 	glog.Info("Starting ...")
 
-	// creating proper isolator
+	// creating hugepage isolator
 	hugepageIsolator, err := hugepages.New(name)
 	if err != nil {
 		glog.Fatalf("Cannot create hugepages isolator: %q", err)
