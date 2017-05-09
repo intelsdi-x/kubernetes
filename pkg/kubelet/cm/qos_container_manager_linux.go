@@ -54,6 +54,7 @@ type qosContainerManagerImpl struct {
 	getNodeAllocatable func() v1.ResourceList
 	cgroupRoot         string
 	qosReserved        map[v1.ResourceName]int64
+	cpuManager         CPUManager
 }
 
 func NewQOSContainerManager(subsystems *CgroupSubsystems, cgroupRoot string, nodeConfig NodeConfig) (QOSContainerManager, error) {
@@ -68,6 +69,7 @@ func NewQOSContainerManager(subsystems *CgroupSubsystems, cgroupRoot string, nod
 		cgroupManager: NewCgroupManager(subsystems, nodeConfig.CgroupDriver),
 		cgroupRoot:    cgroupRoot,
 		qosReserved:   nodeConfig.ExperimentalQOSReserved,
+		cpuManager:    GetCPUManagerSingleton(nodeConfig.CgroupsPerQOS),
 	}, nil
 }
 
@@ -81,6 +83,9 @@ func (m *qosContainerManagerImpl) Start(getNodeAllocatable func() v1.ResourceLis
 	if !cm.Exists(CgroupName(rootContainer)) {
 		return fmt.Errorf("root container %s doesn't exist", rootContainer)
 	}
+
+	m.cpuManager.Start(getNodeAllocatable, activePods)
+
 
 	// Top level for Qos containers are created only for Burstable
 	// and Best Effort classes
@@ -126,6 +131,8 @@ func (m *qosContainerManagerImpl) Start(getNodeAllocatable func() v1.ResourceLis
 	m.getNodeAllocatable = getNodeAllocatable
 	m.activePods = activePods
 
+
+
 	// update qos cgroup tiers on startup and in periodic intervals
 	// to ensure desired state is in synch with actual state.
 	go wait.Until(func() {
@@ -144,6 +151,9 @@ func (m *qosContainerManagerImpl) setCPUCgroupConfig(configs map[v1.PodQOSClass]
 	for i := range pods {
 		pod := pods[i]
 		qosClass := qos.GetPodQOS(pod)
+		if qosClass == v1.PodQOSGuaranteed {
+			m.cpuManager.AddCpusetCpusForGuaranteedPod(pod)
+		}
 		if qosClass != v1.PodQOSBurstable {
 			// we only care about the burstable qos tier
 			continue
@@ -157,9 +167,11 @@ func (m *qosContainerManagerImpl) setCPUCgroupConfig(configs map[v1.PodQOSClass]
 		}
 	}
 
+
 	// make sure best effort is always 2 shares
 	bestEffortCPUShares := int64(MinShares)
 	configs[v1.PodQOSBestEffort].ResourceParameters.CpuShares = &bestEffortCPUShares
+	configs[v1.PodQOSBestEffort].ResourceParameters.CpusetCpus = m.cpuManager.GetSharedCores()
 
 	// set burstable shares based on current observe state
 	burstableCPUShares := MilliCPUToShares(burstablePodCPURequest)
@@ -167,6 +179,7 @@ func (m *qosContainerManagerImpl) setCPUCgroupConfig(configs map[v1.PodQOSClass]
 		burstableCPUShares = int64(MinShares)
 	}
 	configs[v1.PodQOSBurstable].ResourceParameters.CpuShares = &burstableCPUShares
+	configs[v1.PodQOSBurstable].ResourceParameters.CpusetCpus = m.cpuManager.GetSharedCores()
 	return nil
 }
 
