@@ -1837,6 +1837,7 @@ func Convert_api_HostPathVolumeSource_To_v1_HostPathVolumeSource(in *api.HostPat
 func autoConvert_v1_HugePagesVolumeSource_To_api_HugePagesVolumeSource(in *HugePagesVolumeSource, out *api.HugePagesVolumeSource, s conversion.Scope) error {
 	out.PageSize = in.PageSize
 	out.MaxSize = in.MaxSize
+	out.MinSize = in.MinSize
 	return nil
 }
 
@@ -1848,6 +1849,7 @@ func Convert_v1_HugePagesVolumeSource_To_api_HugePagesVolumeSource(in *HugePages
 func autoConvert_api_HugePagesVolumeSource_To_v1_HugePagesVolumeSource(in *api.HugePagesVolumeSource, out *HugePagesVolumeSource, s conversion.Scope) error {
 	out.PageSize = in.PageSize
 	out.MaxSize = in.MaxSize
+	out.MinSize = in.MinSize
 	return nil
 }
 

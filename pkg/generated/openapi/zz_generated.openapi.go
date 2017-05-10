@@ -3971,7 +3971,14 @@ func GetOpenAPIDefinitions(ref openapi.ReferenceCallback) map[string]openapi.Ope
 						},
 						"size": {
 							SchemaProps: spec.SchemaProps{
-								Description: "Size of HugePages mount For pagesize, size, min_size and nr_inodes options, you can use [G|g]/[M|m]/[K|k] to represent giga/mega/kilo. For example, size=2K has the same meaning as size=2048.",
+								Description: "The size option sets the maximum value of memory (huge pages). The size option can be specified in bytes, or as a percentage of the specified huge page pool (nr_hugepages). You can use [G|g]/[M|m]/[K|k] to represent giga/mega/kilo. For example, size=2K has the same meaning as size=2048.",
+								Type:        []string{"string"},
+								Format:      "",
+							},
+						},
+						"minSize": {
+							SchemaProps: spec.SchemaProps{
+								Description: "The min_size option sets the minimum value of memory (huge pages) allowed for the filesystem.  min_size can be specified in the same way as size, either bytes or a percentage of the huge page pool.",
 								Type:        []string{"string"},
 								Format:      "",
 							},
