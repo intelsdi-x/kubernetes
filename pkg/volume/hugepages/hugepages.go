@@ -18,9 +18,8 @@ import (
 // http://issue.k8s.io/2630
 const perm os.FileMode = 0777
 
-// This is the primary entrypoint for volume plugins.
+// ProbeVolumePlugins is the primary entrypoint for volume plugins.
 func ProbeVolumePlugins() []volume.VolumePlugin {
-	glog.V(1).Info("Inside HugePages: ProbeVolumePlugins")
 	return []volume.VolumePlugin{
 		&hugePagesPlugin{nil},
 	}
@@ -85,6 +84,7 @@ func (plugin *hugePagesPlugin) NewMounter(spec *volume.Spec, pod *v1.Pod, opts v
 		mounter:  plugin.host.GetMounter(),
 		pageSize: spec.Volume.HugePages.PageSize,
 		size:     spec.Volume.HugePages.MaxSize,
+		minSize:  spec.Volume.HugePages.MinSize,
 		plugin:   plugin,
 	}, nil
 }
@@ -117,6 +117,7 @@ type hugePages struct {
 	mounter  mount.Interface
 	plugin   *hugePagesPlugin
 	pageSize string
+	minSize  string
 	size     string
 	volume.MetricsNil
 }
@@ -183,6 +184,7 @@ func (hp *hugePages) setupHugePages(dir string) error {
 	options := []string{
 		fmt.Sprintf("size=%s", hp.size),
 		fmt.Sprintf("pagesize=%s", hp.pageSize),
+		fmt.Sprintf("min_size=%s", hp.minSize),
 	}
 
 	return hp.mounter.Mount("nodev", dir, "hugetlbfs", options)
