@@ -908,9 +908,10 @@ func printScaleIOVolumeSource(sio *api.ScaleIOVolumeSource, w PrefixWriter) {
 
 func printHugePagesVolumeSource(hp *api.HugePagesVolumeSource, w PrefixWriter) {
 	w.Write(LEVEL_2, "Type:\tHugePages (pseudo filesystem of type hugetlbfs representing HugePages)\n"+
-		"    PageSize:\t%v\n", hp.PageSize,
-		"    Size:\t%v\n", hp.MaxSize,
-		"    MinSize:\t%v\n", hp.MinSize)
+		"    PageSize:\t%v\n"+
+		"    Size:\t%v\n"+
+		"    MinSize:\t%v\n",
+		hp.PageSize, hp.MaxSize, hp.MinSize)
 }
 
 type PersistentVolumeDescriber struct {
