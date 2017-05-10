@@ -365,4 +365,7 @@ func SetDefaults_HugePagesVolumeSource(obj *HugePagesVolumeSource) {
 	if obj.MaxSize == "" {
 		obj.MaxSize = "2M"
 	}
+	if obj.MinSize == "" {
+		obj.MinSize = "2M"
+	}
 }

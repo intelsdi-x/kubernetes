@@ -14,6 +14,6 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package host_path contains the internal representation of hostPath
+// Package hugepages contains the internal representation of hostPath
 // volumes.
 package hugepages // import "k8s.io/kubernetes/pkg/volume/hugepages"
