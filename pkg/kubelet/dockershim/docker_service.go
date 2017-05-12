@@ -25,6 +25,7 @@ import (
 
 	"github.com/blang/semver"
 	dockertypes "github.com/docker/engine-api/types"
+	dockercontainer "github.com/docker/engine-api/types/container"
 	"github.com/golang/glog"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -307,7 +308,26 @@ func (ds *dockerService) UpdateRuntimeConfig(runtimeConfig *runtimeapi.RuntimeCo
 		event[network.NET_PLUGIN_EVENT_POD_CIDR_CHANGE_DETAIL_CIDR] = runtimeConfig.NetworkConfig.PodCidr
 		ds.network.Event(network.NET_PLUGIN_EVENT_POD_CIDR_CHANGE, event)
 	}
-	return
+
+	if runtimeConfig.ResourceConfig != nil {
+
+		runtimeResourceUpd := runtimeConfig.ResourceConfig.ResourceUpdate
+
+		containerUpdateConfig := dockercontainer.UpdateConfig {
+			Resources: dockercontainer.Resources {
+					CPUPeriod  : runtimeResourceUpd.CpuPeriod,
+					CPUQuota   : runtimeResourceUpd.CpuQuota,
+					CPUShares  : runtimeResourceUpd.CpuShares,
+					Memory     : runtimeResourceUpd.MemoryLimitInBytes,
+					CpusetCpus : runtimeResourceUpd.CpusetCpus,
+					CpusetMems : runtimeResourceUpd.CpusetMems,
+			},
+		}
+
+		err = ds.client.UpdateContainer(runtimeConfig.ResourceConfig.ContainerId, containerUpdateConfig)
+	}
+
+	return err
 }
 
 // GetNetNS returns the network namespace of the given containerID. The ID

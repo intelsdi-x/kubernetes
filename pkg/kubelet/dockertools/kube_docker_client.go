@@ -33,6 +33,7 @@ import (
 	dockerstdcopy "github.com/docker/docker/pkg/stdcopy"
 	dockerapi "github.com/docker/engine-api/client"
 	dockertypes "github.com/docker/engine-api/types"
+	dockercontainer "github.com/docker/engine-api/types/container"
 	"golang.org/x/net/context"
 )
 
@@ -153,6 +154,17 @@ func (d *kubeDockerClient) StartContainer(id string) error {
 	ctx, cancel := d.getTimeoutContext()
 	defer cancel()
 	err := d.client.ContainerStart(ctx, id)
+	if ctxErr := contextError(ctx); ctxErr != nil {
+		return ctxErr
+	}
+	return err
+}
+
+func (d *kubeDockerClient) UpdateContainer(id string, updateConfig dockercontainer.UpdateConfig) error {
+	ctx, cancel := d.getTimeoutContext()
+	defer cancel()
+	err := d.client.ContainerUpdate(ctx, id, updateConfig)
+
 	if ctxErr := contextError(ctx); ctxErr != nil {
 		return ctxErr
 	}

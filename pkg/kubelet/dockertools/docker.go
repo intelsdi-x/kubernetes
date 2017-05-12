@@ -30,6 +30,7 @@ import (
 	"github.com/docker/docker/pkg/jsonmessage"
 	dockerapi "github.com/docker/engine-api/client"
 	dockertypes "github.com/docker/engine-api/types"
+	dockercontainer "github.com/docker/engine-api/types/container"
 	"github.com/golang/glog"
 	"k8s.io/apimachinery/pkg/types"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
@@ -60,6 +61,9 @@ type DockerInterface interface {
 	InspectContainer(id string) (*dockertypes.ContainerJSON, error)
 	CreateContainer(dockertypes.ContainerCreateConfig) (*dockertypes.ContainerCreateResponse, error)
 	StartContainer(id string) error
+
+	UpdateContainer(id string, updateConfig dockercontainer.UpdateConfig) error
+
 	StopContainer(id string, timeout int) error
 	RemoveContainer(id string, opts dockertypes.ContainerRemoveOptions) error
 	InspectImageByRef(imageRef string) (*dockertypes.ImageInspect, error)
