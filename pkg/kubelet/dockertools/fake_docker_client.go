@@ -554,6 +554,16 @@ func (f *FakeDockerClient) StartContainer(id string) error {
 	return nil
 }
 
+
+// UpdateContainer is a test-spy implementation of DockerInterface.StartContainer.
+// It adds an entry "start" to the internal method call record.
+func (f *FakeDockerClient) UpdateContainer(id string, u dockercontainer.UpdateConfig) error {
+	// TODO(SSc) Add implementation here
+	return nil
+}
+
+
+
 // StopContainer is a test-spy implementation of DockerInterface.StopContainer.
 // It adds an entry "stop" to the internal method call record.
 func (f *FakeDockerClient) StopContainer(id string, timeout int) error {
