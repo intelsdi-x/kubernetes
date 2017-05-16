@@ -138,12 +138,12 @@ func (hp *hugePages) CanMount() error {
 }
 
 // SetUp creates new directory.
-func (hp *hugePages) SetUp(fsGroup *int64) error {
+func (hp *hugePages) SetUp(fsGroup *types.UnixGroupID) error {
 	return hp.SetUpAt(hp.GetPath(), fsGroup)
 }
 
 // SetUpAt creates new directory.
-func (hp *hugePages) SetUpAt(dir string, fsGroup *int64) error {
+func (hp *hugePages) SetUpAt(dir string, fsGroup *types.UnixGroupID) error {
 	notMnt, err := hp.mounter.IsLikelyNotMountPoint(dir)
 	// Getting an os.IsNotExist err from is a contingency; the directory
 	// may not exist yet, in which case, setup should run.

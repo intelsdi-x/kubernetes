@@ -3939,6 +3939,37 @@ func GetOpenAPIDefinitions(ref openapi.ReferenceCallback) map[string]openapi.Ope
 			Dependencies: []string{
 				"k8s.io/kubernetes/pkg/api/v1.ExecAction", "k8s.io/kubernetes/pkg/api/v1.HTTPGetAction", "k8s.io/kubernetes/pkg/api/v1.TCPSocketAction"},
 		},
+		"k8s.io/kubernetes/pkg/api/v1.HostAlias": {
+			Schema: spec.Schema{
+				SchemaProps: spec.SchemaProps{
+					Description: "HostAlias holds the mapping between IP and hostnames that will be injected as an entry in the pod's hosts file.",
+					Properties: map[string]spec.Schema{
+						"ip": {
+							SchemaProps: spec.SchemaProps{
+								Description: "IP address of the host file entry.",
+								Type:        []string{"string"},
+								Format:      "",
+							},
+						},
+						"hostnames": {
+							SchemaProps: spec.SchemaProps{
+								Description: "Hostnames for the the above IP address.",
+								Type:        []string{"array"},
+								Items: &spec.SchemaOrArray{
+									Schema: &spec.Schema{
+										SchemaProps: spec.SchemaProps{
+											Type:   []string{"string"},
+											Format: "",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			Dependencies: []string{},
+		},
 		"k8s.io/kubernetes/pkg/api/v1.HostPathVolumeSource": {
 			Schema: spec.Schema{
 				SchemaProps: spec.SchemaProps{
@@ -6651,7 +6682,7 @@ func GetOpenAPIDefinitions(ref openapi.ReferenceCallback) map[string]openapi.Ope
 						},
 						"nodeSelector": {
 							SchemaProps: spec.SchemaProps{
-								Description: "NodeSelector is a selector which must be true for the pod to fit on a node. Selector which must match a node's labels for the pod to be scheduled on that node. More info: http://kubernetes.io/docs/user-guide/node-selection/README",
+								Description: "NodeSelector is a selector which must be true for the pod to fit on a node. Selector which must match a node's labels for the pod to be scheduled on that node. More info: http://kubernetes.io/docs/user-guide/node-selection/README.md",
 								Type:        []string{"object"},
 								AdditionalProperties: &spec.SchemaOrBool{
 									Schema: &spec.Schema{
@@ -6777,12 +6808,31 @@ func GetOpenAPIDefinitions(ref openapi.ReferenceCallback) map[string]openapi.Ope
 								},
 							},
 						},
+						"hostMappings": {
+							VendorExtensible: spec.VendorExtensible{
+								Extensions: spec.Extensions{
+									"x-kubernetes-patch-merge-key": "IP",
+									"x-kubernetes-patch-strategy":  "merge",
+								},
+							},
+							SchemaProps: spec.SchemaProps{
+								Description: "HostAliases is an optional list of hosts and IPs that will be injected into the pod's hosts file if specified. This is only valid for non-hostNetwork pods.",
+								Type:        []string{"array"},
+								Items: &spec.SchemaOrArray{
+									Schema: &spec.Schema{
+										SchemaProps: spec.SchemaProps{
+											Ref: ref("k8s.io/kubernetes/pkg/api/v1.HostAlias"),
+										},
+									},
+								},
+							},
+						},
 					},
 					Required: []string{"containers"},
 				},
 			},
 			Dependencies: []string{
-				"k8s.io/kubernetes/pkg/api/v1.Affinity", "k8s.io/kubernetes/pkg/api/v1.Container", "k8s.io/kubernetes/pkg/api/v1.LocalObjectReference", "k8s.io/kubernetes/pkg/api/v1.PodSecurityContext", "k8s.io/kubernetes/pkg/api/v1.Toleration", "k8s.io/kubernetes/pkg/api/v1.Volume"},
+				"k8s.io/kubernetes/pkg/api/v1.Affinity", "k8s.io/kubernetes/pkg/api/v1.Container", "k8s.io/kubernetes/pkg/api/v1.HostAlias", "k8s.io/kubernetes/pkg/api/v1.LocalObjectReference", "k8s.io/kubernetes/pkg/api/v1.PodSecurityContext", "k8s.io/kubernetes/pkg/api/v1.Toleration", "k8s.io/kubernetes/pkg/api/v1.Volume"},
 		},
 		"k8s.io/kubernetes/pkg/api/v1.PodStatus": {
 			Schema: spec.Schema{
@@ -12793,9 +12843,56 @@ func GetOpenAPIDefinitions(ref openapi.ReferenceCallback) map[string]openapi.Ope
 			Dependencies: []string{
 				"k8s.io/kubernetes/pkg/apis/certificates/v1beta1.CertificateSigningRequestCondition"},
 		},
+		"k8s.io/kubernetes/pkg/apis/componentconfig/v1alpha1.ClientConnectionConfiguration": {
+			Schema: spec.Schema{
+				SchemaProps: spec.SchemaProps{
+					Description: "ClientConnectionConfiguration contains details for constructing a client.",
+					Properties: map[string]spec.Schema{
+						"kubeconfig": {
+							SchemaProps: spec.SchemaProps{
+								Description: "kubeConfigFile is the path to a kubeconfig file.",
+								Type:        []string{"string"},
+								Format:      "",
+							},
+						},
+						"acceptContentTypes": {
+							SchemaProps: spec.SchemaProps{
+								Description: "acceptContentTypes defines the Accept header sent by clients when connecting to a server, overriding the default value of 'application/json'. This field will control all connections to the server used by a particular client.",
+								Type:        []string{"string"},
+								Format:      "",
+							},
+						},
+						"contentType": {
+							SchemaProps: spec.SchemaProps{
+								Description: "contentType is the content type used when sending data to the server from this client.",
+								Type:        []string{"string"},
+								Format:      "",
+							},
+						},
+						"qps": {
+							SchemaProps: spec.SchemaProps{
+								Description: "cps controls the number of queries per second allowed for this connection.",
+								Type:        []string{"number"},
+								Format:      "float",
+							},
+						},
+						"burst": {
+							SchemaProps: spec.SchemaProps{
+								Description: "burst allows extra queries to accumulate when a client is exceeding its rate.",
+								Type:        []string{"integer"},
+								Format:      "int32",
+							},
+						},
+					},
+					Required: []string{"kubeconfig", "acceptContentTypes", "contentType", "qps", "burst"},
+				},
+			},
+			Dependencies: []string{},
+		},
 		"k8s.io/kubernetes/pkg/apis/componentconfig/v1alpha1.KubeProxyConfiguration": {
 			Schema: spec.Schema{
 				SchemaProps: spec.SchemaProps{
+					Description: "KubeProxyConfiguration contains everything necessary to configure the Kubernetes proxy server.",
 					Properties: map[string]spec.Schema{
 						"kind": {
 							SchemaProps: spec.SchemaProps{
@@ -12811,9 +12908,30 @@ func GetOpenAPIDefinitions(ref openapi.ReferenceCallback) map[string]openapi.Ope
 								Format:      "",
 							},
 						},
+						"featureGates": {
+							SchemaProps: spec.SchemaProps{
+								Description: "featureGates is a comma-separated list of key=value pairs that control which alpha/beta features are enabled.\n\ncomponents to use config files because local-up-cluster.sh only supports the --feature-gates flag right now, which is comma-separated key=value pairs.",
+								Type:        []string{"string"},
+								Format:      "",
+							},
+						},
 						"bindAddress": {
 							SchemaProps: spec.SchemaProps{
 								Description: "bindAddress is the IP address for the proxy server to serve on (set to 0.0.0.0 for all interfaces)",
+								Type:        []string{"string"},
+								Format:      "",
+							},
+						},
+						"healthzBindAddress": {
+							SchemaProps: spec.SchemaProps{
+								Description: "healthzBindAddress is the IP address and port for the health check server to serve on, defaulting to 0.0.0.0:10256",
+								Type:        []string{"string"},
+								Format:      "",
+							},
+						},
+						"metricsBindAddress": {
+							SchemaProps: spec.SchemaProps{
+								Description: "metricsBindAddress is the IP address and port for the metrics server to serve on, defaulting to 127.0.0.1:10249 (set to 0.0.0.0 for all interfaces)",
 								Type:        []string{"string"},
 								Format:      "",
 							},
@@ -12825,20 +12943,6 @@ func GetOpenAPIDefinitions(ref openapi.ReferenceCallback) map[string]openapi.Ope
 								Format:      "",
 							},
 						},
-						"healthzBindAddress": {
-							SchemaProps: spec.SchemaProps{
-								Description: "healthzBindAddress is the IP address for the health check server to serve on, defaulting to 127.0.0.1 (set to 0.0.0.0 for all interfaces)",
-								Type:        []string{"string"},
-								Format:      "",
-							},
-						},
-						"healthzPort": {
-							SchemaProps: spec.SchemaProps{
-								Description: "healthzPort is the port to bind the health check server. Use 0 to disable.",
-								Type:        []string{"integer"},
-								Format:      "int32",
-							},
-						},
 						"hostnameOverride": {
 							SchemaProps: spec.SchemaProps{
 								Description: "hostnameOverride, if non-empty, will be used as the identity instead of the actual hostname.",
@@ -12846,44 +12950,16 @@ func GetOpenAPIDefinitions(ref openapi.ReferenceCallback) map[string]openapi.Ope
 								Format:      "",
 							},
 						},
-						"iptablesMasqueradeBit": {
+						"clientConnection": {
 							SchemaProps: spec.SchemaProps{
-								Description: "iptablesMasqueradeBit is the bit of the iptables fwmark space to use for SNAT if using the pure iptables proxy mode. Values must be within the range [0, 31].",
-								Type:        []string{"integer"},
-								Format:      "int32",
+								Description: "clientConnection specifies the kubeconfig file and client connection settings for the proxy server to use when communicating with the apiserver.",
+								Ref:         ref("k8s.io/kubernetes/pkg/apis/componentconfig/v1alpha1.ClientConnectionConfiguration"),
 							},
 						},
-						"iptablesSyncPeriodSeconds": {
+						"iptables": {
 							SchemaProps: spec.SchemaProps{
-								Description: "iptablesSyncPeriod is the period that iptables rules are refreshed (e.g. '5s', '1m', '2h22m').  Must be greater than 0.",
-								Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
-							},
-						},
-						"iptablesMinSyncPeriodSeconds": {
-							SchemaProps: spec.SchemaProps{
-								Description: "iptablesMinSyncPeriod is the minimum period that iptables rules are refreshed (e.g. '5s', '1m', '2h22m').",
-								Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
-							},
-						},
-						"kubeconfigPath": {
-							SchemaProps: spec.SchemaProps{
-								Description: "kubeconfigPath is the path to the kubeconfig file with authorization information (the master location is set by the master flag).",
-								Type:        []string{"string"},
-								Format:      "",
-							},
-						},
-						"masqueradeAll": {
-							SchemaProps: spec.SchemaProps{
-								Description: "masqueradeAll tells kube-proxy to SNAT everything if using the pure iptables proxy mode.",
-								Type:        []string{"boolean"},
-								Format:      "",
-							},
-						},
-						"master": {
-							SchemaProps: spec.SchemaProps{
-								Description: "master is the address of the Kubernetes API server (overrides any value in kubeconfig)",
-								Type:        []string{"string"},
-								Format:      "",
+								Description: "iptables contains iptables-related configuration options.",
+								Ref:         ref("k8s.io/kubernetes/pkg/apis/componentconfig/v1alpha1.KubeProxyIPTablesConfiguration"),
 							},
 						},
 						"oomScoreAdj": {
@@ -12920,41 +12996,103 @@ func GetOpenAPIDefinitions(ref openapi.ReferenceCallback) map[string]openapi.Ope
 								Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
 							},
 						},
-						"conntrackMax": {
+						"conntrack": {
 							SchemaProps: spec.SchemaProps{
-								Description: "conntrackMax is the maximum number of NAT connections to track (0 to leave as-is).  This takes precedence over conntrackMaxPerCore and conntrackMin.",
-								Type:        []string{"integer"},
-								Format:      "int32",
+								Description: "conntrack contains conntrack-related configuration options.",
+								Ref:         ref("k8s.io/kubernetes/pkg/apis/componentconfig/v1alpha1.KubeProxyConntrackConfiguration"),
 							},
 						},
-						"conntrackMaxPerCore": {
+						"configSyncPeriod": {
 							SchemaProps: spec.SchemaProps{
-								Description: "conntrackMaxPerCore is the maximum number of NAT connections to track per CPU core (0 to leave the limit as-is and ignore conntrackMin).",
-								Type:        []string{"integer"},
-								Format:      "int32",
-							},
-						},
-						"conntrackMin": {
-							SchemaProps: spec.SchemaProps{
-								Description: "conntrackMin is the minimum value of connect-tracking records to allocate, regardless of conntrackMaxPerCore (set conntrackMaxPerCore=0 to leave the limit as-is).",
-								Type:        []string{"integer"},
-								Format:      "int32",
-							},
-						},
-						"conntrackTCPEstablishedTimeout": {
-							SchemaProps: spec.SchemaProps{
-								Description: "conntrackTCPEstablishedTimeout is how long an idle TCP connection will be kept open (e.g. '2s').  Must be greater than 0.",
-								Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
-							},
-						},
-						"conntrackTCPCloseWaitTimeout": {
-							SchemaProps: spec.SchemaProps{
-								Description: "conntrackTCPCloseWaitTimeout is how long an idle conntrack entry in CLOSE_WAIT state will remain in the conntrack table. (e.g. '60s'). Must be greater than 0 to set.",
+								Description: "configSyncPeriod is how often configuration from the apiserver is refreshed. Must be greater than 0.",
 								Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
 							},
 						},
 					},
-					Required: []string{"bindAddress", "clusterCIDR", "healthzBindAddress", "healthzPort", "hostnameOverride", "iptablesMasqueradeBit", "iptablesSyncPeriodSeconds", "iptablesMinSyncPeriodSeconds", "kubeconfigPath", "masqueradeAll", "master", "oomScoreAdj", "mode", "portRange", "resourceContainer", "udpTimeoutMilliseconds", "conntrackMax", "conntrackMaxPerCore", "conntrackMin", "conntrackTCPEstablishedTimeout", "conntrackTCPCloseWaitTimeout"},
+					Required: []string{"featureGates", "bindAddress", "healthzBindAddress", "metricsBindAddress", "clusterCIDR", "hostnameOverride", "clientConnection", "iptables", "oomScoreAdj", "mode", "portRange", "resourceContainer", "udpTimeoutMilliseconds", "conntrack", "configSyncPeriod"},
+				},
+			},
+			Dependencies: []string{
+				"k8s.io/apimachinery/pkg/apis/meta/v1.Duration", "k8s.io/kubernetes/pkg/apis/componentconfig/v1alpha1.ClientConnectionConfiguration", "k8s.io/kubernetes/pkg/apis/componentconfig/v1alpha1.KubeProxyConntrackConfiguration", "k8s.io/kubernetes/pkg/apis/componentconfig/v1alpha1.KubeProxyIPTablesConfiguration"},
+		},
+		"k8s.io/kubernetes/pkg/apis/componentconfig/v1alpha1.KubeProxyConntrackConfiguration": {
+			Schema: spec.Schema{
+				SchemaProps: spec.SchemaProps{
+					Description: "KubeProxyConntrackConfiguration contains conntrack settings for the Kubernetes proxy server.",
+					Properties: map[string]spec.Schema{
+						"max": {
+							SchemaProps: spec.SchemaProps{
+								Description: "max is the maximum number of NAT connections to track (0 to leave as-is).  This takes precedence over conntrackMaxPerCore and conntrackMin.",
+								Type:        []string{"integer"},
+								Format:      "int32",
+							},
+						},
+						"maxPerCore": {
+							SchemaProps: spec.SchemaProps{
+								Description: "maxPerCore is the maximum number of NAT connections to track per CPU core (0 to leave the limit as-is and ignore conntrackMin).",
+								Type:        []string{"integer"},
+								Format:      "int32",
+							},
+						},
+						"min": {
+							SchemaProps: spec.SchemaProps{
+								Description: "min is the minimum value of connect-tracking records to allocate, regardless of conntrackMaxPerCore (set conntrackMaxPerCore=0 to leave the limit as-is).",
+								Type:        []string{"integer"},
+								Format:      "int32",
+							},
+						},
+						"tcpEstablishedTimeout": {
+							SchemaProps: spec.SchemaProps{
+								Description: "tcpEstablishedTimeout is how long an idle TCP connection will be kept open (e.g. '2s').  Must be greater than 0.",
+								Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
+							},
+						},
+						"tcpCloseWaitTimeout": {
+							SchemaProps: spec.SchemaProps{
+								Description: "tcpCloseWaitTimeout is how long an idle conntrack entry in CLOSE_WAIT state will remain in the conntrack table. (e.g. '60s'). Must be greater than 0 to set.",
+								Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
+							},
+						},
+					},
+					Required: []string{"max", "maxPerCore", "min", "tcpEstablishedTimeout", "tcpCloseWaitTimeout"},
+				},
+			},
+			Dependencies: []string{
+				"k8s.io/apimachinery/pkg/apis/meta/v1.Duration"},
+		},
+		"k8s.io/kubernetes/pkg/apis/componentconfig/v1alpha1.KubeProxyIPTablesConfiguration": {
+			Schema: spec.Schema{
+				SchemaProps: spec.SchemaProps{
+					Description: "KubeProxyIPTablesConfiguration contains iptables-related configuration details for the Kubernetes proxy server.",
+					Properties: map[string]spec.Schema{
+						"masqueradeBit": {
+							SchemaProps: spec.SchemaProps{
+								Description: "masqueradeBit is the bit of the iptables fwmark space to use for SNAT if using the pure iptables proxy mode. Values must be within the range [0, 31].",
+								Type:        []string{"integer"},
+								Format:      "int32",
+							},
+						},
+						"masqueradeAll": {
+							SchemaProps: spec.SchemaProps{
+								Description: "masqueradeAll tells kube-proxy to SNAT everything if using the pure iptables proxy mode.",
+								Type:        []string{"boolean"},
+								Format:      "",
+							},
+						},
+						"syncPeriod": {
+							SchemaProps: spec.SchemaProps{
+								Description: "syncPeriod is the period that iptables rules are refreshed (e.g. '5s', '1m', '2h22m').  Must be greater than 0.",
+								Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
+							},
+						},
+						"minSyncPeriod": {
+							SchemaProps: spec.SchemaProps{
+								Description: "minSyncPeriod is the minimum period that iptables rules are refreshed (e.g. '5s', '1m', '2h22m').",
+								Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
+							},
+						},
+					},
+					Required: []string{"masqueradeBit", "masqueradeAll", "syncPeriod", "minSyncPeriod"},
 				},
 			},
 			Dependencies: []string{
@@ -14020,6 +14158,13 @@ func GetOpenAPIDefinitions(ref openapi.ReferenceCallback) map[string]openapi.Ope
 						"keepTerminatedPodVolumes": {
 							SchemaProps: spec.SchemaProps{
 								Description: "This flag, if set, instructs the kubelet to keep volumes from terminated pods mounted to the node. This can be useful for debugging volume related issues.",
+								Type:        []string{"boolean"},
+								Format:      "",
+							},
+						},
+						"dockerEnableSharedPID": {
+							SchemaProps: spec.SchemaProps{
+								Description: "This flag, if set, enables use of a shared PID namespace for pods run by the docker CRI runtime.",
 								Type:        []string{"boolean"},
 								Format:      "",
 							},
@@ -18156,6 +18301,340 @@ func GetOpenAPIDefinitions(ref openapi.ReferenceCallback) map[string]openapi.Ope
 			},
 			Dependencies: []string{
 				"k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta", "k8s.io/kubernetes/pkg/apis/storage/v1beta1.StorageClass"},
+		},
+		"k8s.io/metrics/pkg/apis/custom_metrics/v1alpha1.MetricValue": {
+			Schema: spec.Schema{
+				SchemaProps: spec.SchemaProps{
+					Description: "a metric value for some object",
+					Properties: map[string]spec.Schema{
+						"kind": {
+							SchemaProps: spec.SchemaProps{
+								Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: http://releases.k8s.io/HEAD/docs/devel/api-conventions.md#types-kinds",
+								Type:        []string{"string"},
+								Format:      "",
+							},
+						},
+						"apiVersion": {
+							SchemaProps: spec.SchemaProps{
+								Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: http://releases.k8s.io/HEAD/docs/devel/api-conventions.md#resources",
+								Type:        []string{"string"},
+								Format:      "",
+							},
+						},
+						"describedObject": {
+							SchemaProps: spec.SchemaProps{
+								Description: "a reference to the described object",
+								Ref:         ref("k8s.io/client-go/pkg/api/v1.ObjectReference"),
+							},
+						},
+						"metricName": {
+							SchemaProps: spec.SchemaProps{
+								Description: "the name of the metric",
+								Type:        []string{"string"},
+								Format:      "",
+							},
+						},
+						"timestamp": {
+							SchemaProps: spec.SchemaProps{
+								Description: "indicates the time at which the metrics were produced",
+								Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
+							},
+						},
+						"window": {
+							SchemaProps: spec.SchemaProps{
+								Description: "indicates the window ([Timestamp-Window, Timestamp]) from which these metrics were calculated, when returning rate metrics calculated from cumulative metrics (or zero for non-calculated instantaneous metrics).",
+								Type:        []string{"integer"},
+								Format:      "int64",
+							},
+						},
+						"value": {
+							SchemaProps: spec.SchemaProps{
+								Description: "the value of the metric for this",
+								Ref:         ref("k8s.io/apimachinery/pkg/api/resource.Quantity"),
+							},
+						},
+					},
+					Required: []string{"describedObject", "metricName", "timestamp", "value"},
+				},
+			},
+			Dependencies: []string{
+				"k8s.io/apimachinery/pkg/api/resource.Quantity", "k8s.io/apimachinery/pkg/apis/meta/v1.Time", "k8s.io/client-go/pkg/api/v1.ObjectReference"},
+		},
+		"k8s.io/metrics/pkg/apis/custom_metrics/v1alpha1.MetricValueList": {
+			Schema: spec.Schema{
+				SchemaProps: spec.SchemaProps{
+					Description: "a list of values for a given metric for some set of objects",
+					Properties: map[string]spec.Schema{
+						"kind": {
+							SchemaProps: spec.SchemaProps{
+								Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: http://releases.k8s.io/HEAD/docs/devel/api-conventions.md#types-kinds",
+								Type:        []string{"string"},
+								Format:      "",
+							},
+						},
+						"apiVersion": {
+							SchemaProps: spec.SchemaProps{
+								Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: http://releases.k8s.io/HEAD/docs/devel/api-conventions.md#resources",
+								Type:        []string{"string"},
+								Format:      "",
+							},
+						},
+						"metadata": {
+							SchemaProps: spec.SchemaProps{
+								Ref: ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+							},
+						},
+						"items": {
+							SchemaProps: spec.SchemaProps{
+								Description: "the value of the metric across the described objects",
+								Type:        []string{"array"},
+								Items: &spec.SchemaOrArray{
+									Schema: &spec.Schema{
+										SchemaProps: spec.SchemaProps{
+											Ref: ref("k8s.io/metrics/pkg/apis/custom_metrics/v1alpha1.MetricValue"),
+										},
+									},
+								},
+							},
+						},
+					},
+					Required: []string{"items"},
+				},
+			},
+			Dependencies: []string{
+				"k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta", "k8s.io/metrics/pkg/apis/custom_metrics/v1alpha1.MetricValue"},
+		},
+		"k8s.io/metrics/pkg/apis/metrics/v1alpha1.ContainerMetrics": {
+			Schema: spec.Schema{
+				SchemaProps: spec.SchemaProps{
+					Description: "resource usage metrics of a container.",
+					Properties: map[string]spec.Schema{
+						"name": {
+							SchemaProps: spec.SchemaProps{
+								Description: "Container name corresponding to the one from pod.spec.containers.",
+								Type:        []string{"string"},
+								Format:      "",
+							},
+						},
+						"usage": {
+							SchemaProps: spec.SchemaProps{
+								Description: "The memory usage is the memory working set.",
+								Type:        []string{"object"},
+								AdditionalProperties: &spec.SchemaOrBool{
+									Schema: &spec.Schema{
+										SchemaProps: spec.SchemaProps{
+											Ref: ref("k8s.io/apimachinery/pkg/api/resource.Quantity"),
+										},
+									},
+								},
+							},
+						},
+					},
+					Required: []string{"name", "usage"},
+				},
+			},
+			Dependencies: []string{
+				"k8s.io/apimachinery/pkg/api/resource.Quantity"},
+		},
+		"k8s.io/metrics/pkg/apis/metrics/v1alpha1.NodeMetrics": {
+			Schema: spec.Schema{
+				SchemaProps: spec.SchemaProps{
+					Description: "resource usage metrics of a node.",
+					Properties: map[string]spec.Schema{
+						"kind": {
+							SchemaProps: spec.SchemaProps{
+								Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: http://releases.k8s.io/HEAD/docs/devel/api-conventions.md#types-kinds",
+								Type:        []string{"string"},
+								Format:      "",
+							},
+						},
+						"apiVersion": {
+							SchemaProps: spec.SchemaProps{
+								Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: http://releases.k8s.io/HEAD/docs/devel/api-conventions.md#resources",
+								Type:        []string{"string"},
+								Format:      "",
+							},
+						},
+						"metadata": {
+							SchemaProps: spec.SchemaProps{
+								Ref: ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+							},
+						},
+						"timestamp": {
+							SchemaProps: spec.SchemaProps{
+								Description: "The following fields define time interval from which metrics were collected from the interval [Timestamp-Window, Timestamp].",
+								Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
+							},
+						},
+						"window": {
+							SchemaProps: spec.SchemaProps{
+								Ref: ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
+							},
+						},
+						"usage": {
+							SchemaProps: spec.SchemaProps{
+								Description: "The memory usage is the memory working set.",
+								Type:        []string{"object"},
+								AdditionalProperties: &spec.SchemaOrBool{
+									Schema: &spec.Schema{
+										SchemaProps: spec.SchemaProps{
+											Ref: ref("k8s.io/apimachinery/pkg/api/resource.Quantity"),
+										},
+									},
+								},
+							},
+						},
+					},
+					Required: []string{"timestamp", "window", "usage"},
+				},
+			},
+			Dependencies: []string{
+				"k8s.io/apimachinery/pkg/api/resource.Quantity", "k8s.io/apimachinery/pkg/apis/meta/v1.Duration", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta", "k8s.io/apimachinery/pkg/apis/meta/v1.Time"},
+		},
+		"k8s.io/metrics/pkg/apis/metrics/v1alpha1.NodeMetricsList": {
+			Schema: spec.Schema{
+				SchemaProps: spec.SchemaProps{
+					Description: "NodeMetricsList is a list of NodeMetrics.",
+					Properties: map[string]spec.Schema{
+						"kind": {
+							SchemaProps: spec.SchemaProps{
+								Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: http://releases.k8s.io/HEAD/docs/devel/api-conventions.md#types-kinds",
+								Type:        []string{"string"},
+								Format:      "",
+							},
+						},
+						"apiVersion": {
+							SchemaProps: spec.SchemaProps{
+								Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: http://releases.k8s.io/HEAD/docs/devel/api-conventions.md#resources",
+								Type:        []string{"string"},
+								Format:      "",
+							},
+						},
+						"metadata": {
+							SchemaProps: spec.SchemaProps{
+								Description: "Standard list metadata. More info: http://releases.k8s.io/HEAD/docs/devel/api-conventions.md#types-kinds",
+								Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+							},
+						},
+						"items": {
+							SchemaProps: spec.SchemaProps{
+								Description: "List of node metrics.",
+								Type:        []string{"array"},
+								Items: &spec.SchemaOrArray{
+									Schema: &spec.Schema{
+										SchemaProps: spec.SchemaProps{
+											Ref: ref("k8s.io/metrics/pkg/apis/metrics/v1alpha1.NodeMetrics"),
+										},
+									},
+								},
+							},
+						},
+					},
+					Required: []string{"items"},
+				},
+			},
+			Dependencies: []string{
+				"k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta", "k8s.io/metrics/pkg/apis/metrics/v1alpha1.NodeMetrics"},
+		},
+		"k8s.io/metrics/pkg/apis/metrics/v1alpha1.PodMetrics": {
+			Schema: spec.Schema{
+				SchemaProps: spec.SchemaProps{
+					Description: "resource usage metrics of a pod.",
+					Properties: map[string]spec.Schema{
+						"kind": {
+							SchemaProps: spec.SchemaProps{
+								Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: http://releases.k8s.io/HEAD/docs/devel/api-conventions.md#types-kinds",
+								Type:        []string{"string"},
+								Format:      "",
+							},
+						},
+						"apiVersion": {
+							SchemaProps: spec.SchemaProps{
+								Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: http://releases.k8s.io/HEAD/docs/devel/api-conventions.md#resources",
+								Type:        []string{"string"},
+								Format:      "",
+							},
+						},
+						"metadata": {
+							SchemaProps: spec.SchemaProps{
+								Ref: ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+							},
+						},
+						"timestamp": {
+							SchemaProps: spec.SchemaProps{
+								Description: "The following fields define time interval from which metrics were collected from the interval [Timestamp-Window, Timestamp].",
+								Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
+							},
+						},
+						"window": {
+							SchemaProps: spec.SchemaProps{
+								Ref: ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
+							},
+						},
+						"containers": {
+							SchemaProps: spec.SchemaProps{
+								Description: "Metrics for all containers are collected within the same time window.",
+								Type:        []string{"array"},
+								Items: &spec.SchemaOrArray{
+									Schema: &spec.Schema{
+										SchemaProps: spec.SchemaProps{
+											Ref: ref("k8s.io/metrics/pkg/apis/metrics/v1alpha1.ContainerMetrics"),
+										},
+									},
+								},
+							},
+						},
+					},
+					Required: []string{"timestamp", "window", "containers"},
+				},
+			},
+			Dependencies: []string{
+				"k8s.io/apimachinery/pkg/apis/meta/v1.Duration", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta", "k8s.io/apimachinery/pkg/apis/meta/v1.Time", "k8s.io/metrics/pkg/apis/metrics/v1alpha1.ContainerMetrics"},
+		},
+		"k8s.io/metrics/pkg/apis/metrics/v1alpha1.PodMetricsList": {
+			Schema: spec.Schema{
+				SchemaProps: spec.SchemaProps{
+					Description: "PodMetricsList is a list of PodMetrics.",
+					Properties: map[string]spec.Schema{
+						"kind": {
+							SchemaProps: spec.SchemaProps{
+								Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: http://releases.k8s.io/HEAD/docs/devel/api-conventions.md#types-kinds",
+								Type:        []string{"string"},
+								Format:      "",
+							},
+						},
+						"apiVersion": {
+							SchemaProps: spec.SchemaProps{
+								Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: http://releases.k8s.io/HEAD/docs/devel/api-conventions.md#resources",
+								Type:        []string{"string"},
+								Format:      "",
+							},
+						},
+						"metadata": {
+							SchemaProps: spec.SchemaProps{
+								Description: "Standard list metadata. More info: http://releases.k8s.io/HEAD/docs/devel/api-conventions.md#types-kinds",
+								Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+							},
+						},
+						"items": {
+							SchemaProps: spec.SchemaProps{
+								Description: "List of pod metrics.",
+								Type:        []string{"array"},
+								Items: &spec.SchemaOrArray{
+									Schema: &spec.Schema{
+										SchemaProps: spec.SchemaProps{
+											Ref: ref("k8s.io/metrics/pkg/apis/metrics/v1alpha1.PodMetrics"),
+										},
+									},
+								},
+							},
+						},
+					},
+					Required: []string{"items"},
+				},
+			},
+			Dependencies: []string{
+				"k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta", "k8s.io/metrics/pkg/apis/metrics/v1alpha1.PodMetrics"},
 		},
 	}
 }
