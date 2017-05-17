@@ -25,8 +25,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apiserver/pkg/admission"
 	"k8s.io/kubernetes/pkg/api"
-	"k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset"
-	informers "k8s.io/kubernetes/pkg/client/informers/informers_generated/internalversion"
 	kubeapiserveradmission "k8s.io/kubernetes/pkg/kubeapiserver/admission"
 )
 
@@ -44,31 +42,14 @@ func init() {
 // hugePagesMounterPlugin is an implementation of admission.Interface.
 type hugePagesMounterPlugin struct {
 	*admission.Handler
-	client internalclientset.Interface
+	//client internalclientset.Interface
 }
 
-var _ = kubeapiserveradmission.WantsInternalKubeInformerFactory(&hugePagesMounterPlugin{})
-var _ = kubeapiserveradmission.WantsInternalKubeClientSet(&hugePagesMounterPlugin{})
-
-// NewPlugin creates a new pod preset admission plugin.
+// NewPlugin creates a new hugePagesMounter admission plugin.
 func NewPlugin() *hugePagesMounterPlugin {
 	return &hugePagesMounterPlugin{
 		Handler: admission.NewHandler(admission.Create, admission.Update),
 	}
-}
-
-func (plugin *hugePagesMounterPlugin) Validate() error {
-	if plugin.client == nil {
-		return fmt.Errorf("%s requires a client", pluginName)
-	}
-	return nil
-}
-
-func (a *hugePagesMounterPlugin) SetInternalKubeClientSet(client internalclientset.Interface) {
-	a.client = client
-}
-
-func (a *hugePagesMounterPlugin) SetInternalKubeInformerFactory(f informers.SharedInformerFactory) {
 }
 
 // Admit injects a pod with the specific fields for each pod preset it matches.
@@ -106,12 +87,5 @@ func (c *hugePagesMounterPlugin) Admit(a admission.Attributes) error {
 		}
 
 	}
-
-	// add annotation
-	if pod.ObjectMeta.Annotations == nil {
-		pod.ObjectMeta.Annotations = map[string]string{}
-	}
-	pod.ObjectMeta.Annotations[fmt.Sprintf("%s", annotationPrefix)] = "hugePageMounter"
-
 	return nil
 }
