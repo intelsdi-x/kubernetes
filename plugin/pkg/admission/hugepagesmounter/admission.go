@@ -22,6 +22,7 @@ import (
 
 	"github.com/golang/glog"
 
+	"github.com/pborman/uuid"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apiserver/pkg/admission"
 	"k8s.io/kubernetes/pkg/api"
@@ -31,6 +32,7 @@ import (
 const (
 	annotationPrefix = "hugepagesmounter.admission.kubernetes.io"
 	pluginName       = "HugePagesMounter"
+	volumeNamePrefix = "hugepagesmounter-"
 )
 
 func init() {
@@ -67,12 +69,13 @@ func (c *hugePagesMounterPlugin) Admit(a admission.Attributes) error {
 
 	for index, container := range pod.Spec.Containers {
 		if hugePage, found := container.Resources.Requests[api.ResourceName("alpha.kubernetes.io/hugepages-2048kB")]; found {
+			uid := uuid.New()
 			pod.Spec.Volumes = append(pod.Spec.Volumes, api.Volume{
-				Name: "hugepagesmounterplugin-" + fmt.Sprintf("%d", index),
+				Name: generateVolumeName(index, uid),
 				VolumeSource: api.VolumeSource{
 					HugePages: &api.HugePagesVolumeSource{
 						PageSize: "2M",
-						MaxSize:  fmt.Sprintf("%dM", hugePage.Value()*2),
+						MaxSize:  calculateMaxSize(hugePage.Value(), 2),
 						MinSize:  "2M",
 					},
 				},
@@ -80,7 +83,7 @@ func (c *hugePagesMounterPlugin) Admit(a admission.Attributes) error {
 			)
 
 			pod.Spec.Containers[index].VolumeMounts = append(pod.Spec.Containers[index].VolumeMounts, api.VolumeMount{
-				Name:      "hugepagesmounterplugin-" + fmt.Sprintf("%d", index),
+				Name:      generateVolumeName(index, uid),
 				MountPath: "/hugepages",
 			})
 			glog.V(4).Info("Added hugePagesMount according to requests")
@@ -88,4 +91,12 @@ func (c *hugePagesMounterPlugin) Admit(a admission.Attributes) error {
 
 	}
 	return nil
+}
+
+func generateVolumeName(index int, uid string) string {
+	return fmt.Sprintf("hugepagesmounterplugin-%s-%d", uid, index)
+}
+
+func calculateMaxSize(pagesNum int64, pageSize int64) string {
+	return fmt.Sprintf("%dM", pagesNum*pageSize)
 }
