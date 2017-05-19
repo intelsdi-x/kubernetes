@@ -27,6 +27,7 @@ import (
 
 	"k8s.io/kubernetes/pkg/api/v1"
 	"k8s.io/kubernetes/pkg/kubelet/qos"
+	"k8s.io/kubernetes/pkg/kubelet/cpumanager"
 )
 
 const (
@@ -111,11 +112,16 @@ func ResourceConfigForPod(pod *v1.Pod) *ResourceConfig {
 
 	// build the result
 	result := &ResourceConfig{}
+
+	//TODO (SSc) Mae sure that is all needed here for CPU Manger "PodQOSBurstable"
+	cmanager := cpumanager.GetCPUManagerSingleton()
+
 	if qosClass == v1.PodQOSGuaranteed {
 		result.CpuShares = &cpuShares
 		result.CpuQuota = &cpuQuota
 		result.CpuPeriod = &cpuPeriod
 		result.Memory = &memoryLimits
+		result.CpusetCpus = &cmanager.GetPodCpuset(pod.UID).String()
 	} else if qosClass == v1.PodQOSBurstable {
 		result.CpuShares = &cpuShares
 		if cpuLimitsDeclared {

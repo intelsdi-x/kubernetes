@@ -31,6 +31,8 @@ type ResourceConfig struct {
 	CpuQuota *int64
 	// CPU quota period.
 	CpuPeriod *int64
+	// CPU sets
+	CpusetCpus *string
 }
 
 // CgroupName is the abstract name of a cgroup prior to any driver specific conversion.

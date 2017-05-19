@@ -41,6 +41,7 @@ import (
 	"k8s.io/kubernetes/pkg/kubelet/qos"
 	"k8s.io/kubernetes/pkg/kubelet/types"
 	"k8s.io/kubernetes/pkg/kubelet/util/format"
+	"k8s.io/kubernetes/pkg/kubelet/cpumanager"
 	"k8s.io/kubernetes/pkg/util/selinux"
 	"k8s.io/kubernetes/pkg/util/tail"
 )
@@ -193,6 +194,12 @@ func (m *kubeGenericRuntimeManager) generateLinuxContainerConfig(container *v1.C
 		Resources:       &runtimeapi.LinuxContainerResources{},
 		SecurityContext: m.determineEffectiveSecurityContext(pod, container, uid, username),
 	}
+
+	cmananger := cpumanager.GetCPUManagerSingleton()
+
+
+	//TODO (SSc) make sure we ignore init containers
+	lc.Resources.CpusetCpus = cmananger.GetContainerCpuSet(pod.UID, container.Name).String()
 
 	// set linux container resources
 	var cpuShares int64

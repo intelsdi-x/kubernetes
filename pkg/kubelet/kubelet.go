@@ -103,6 +103,7 @@ import (
 	"k8s.io/kubernetes/pkg/util/oom"
 	"k8s.io/kubernetes/pkg/volume"
 	"k8s.io/kubernetes/plugin/pkg/scheduler/algorithm/predicates"
+	"k8s.io/kubernetes/pkg/kubelet/cpumanager"
 )
 
 const (
@@ -646,6 +647,13 @@ func NewMainKubelet(kubeCfg *componentconfig.KubeletConfiguration, kubeDeps *Kub
 		klet.runner = kubecontainer.DirectStreamingRunner(runtime)
 	}
 
+	//TODO(SSc)Add check for qos-per-cgroup flags and so on, also move creation somewhere else
+	//Right now only CRI with docker shim are supported
+	klet.cpuManager, err = cpumanager.NewCPUManager(cpumanager.CPUManagerNoop, klet.containerRuntime, klet.cadvisor , klet.containerManager)
+	if err != nil {
+		return nil, fmt.Errorf("Could not initialize CPU manger")
+	}
+
 	// TODO: Factor out "StatsProvider" from Kubelet so we don't have a cyclic dependency
 	klet.resourceAnalyzer = stats.NewResourceAnalyzer(klet, kubeCfg.VolumeStatsAggPeriod.Duration, klet.containerRuntime)
 
@@ -1083,6 +1091,8 @@ type Kubelet struct {
 	// dockerLegacyService contains some legacy methods for backward compatibility.
 	// It should be set only when docker is using non json-file logging driver.
 	dockerLegacyService dockershim.DockerLegacyService
+
+	cpuManager cpumanager.CPUManager
 }
 
 // setupDataDirs creates:
