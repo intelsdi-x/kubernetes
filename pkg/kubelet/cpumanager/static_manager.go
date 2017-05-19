@@ -35,8 +35,8 @@ func (csm *cpuStaticManager) AddPod(pod *v1.Pod, qosClass v1.PodQOSClass) error 
 	defer csm.Unlock()
 	//TODO(SCc) Add pod to list
 	// check if new pod or already on the list - if new then :
-	// if pod needs exclusive core find free and start eviction
-	// if not mark as using shared pool
+	// -> if pod needs exclusive core find free and start eviction
+	// -> if not mark as using shared pool
 	// if not new, already on the list exit
 	return nil
 }
