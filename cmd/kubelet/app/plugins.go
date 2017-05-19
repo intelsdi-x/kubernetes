@@ -55,6 +55,7 @@ import (
 	"k8s.io/kubernetes/pkg/volume/secret"
 	"k8s.io/kubernetes/pkg/volume/vsphere_volume"
 	// Cloud providers
+	"github.com/google/cadvisor/info/v1"
 	_ "k8s.io/kubernetes/pkg/cloudprovider/providers"
 	"k8s.io/kubernetes/pkg/volume/hugepages"
 )
@@ -62,7 +63,7 @@ import (
 // ProbeVolumePlugins collects all volume plugins into an easy to use list.
 // PluginDir specifies the directory to search for additional third party
 // volume plugins.
-func ProbeVolumePlugins(pluginDir string) []volume.VolumePlugin {
+func ProbeVolumePlugins(pluginDir string, info *v1.MachineInfo) []volume.VolumePlugin {
 	allPlugins := []volume.VolumePlugin{}
 
 	// The list of plugins to probe is decided by the kubelet binary, not
@@ -96,7 +97,7 @@ func ProbeVolumePlugins(pluginDir string) []volume.VolumePlugin {
 	allPlugins = append(allPlugins, projected.ProbeVolumePlugins()...)
 	allPlugins = append(allPlugins, portworx.ProbeVolumePlugins()...)
 	allPlugins = append(allPlugins, scaleio.ProbeVolumePlugins()...)
-	allPlugins = append(allPlugins, hugepages.ProbeVolumePlugins()...)
+	allPlugins = append(allPlugins, hugepages.ProbeVolumePlugins(info)...)
 	return allPlugins
 }
 

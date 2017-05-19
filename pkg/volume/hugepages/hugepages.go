@@ -6,6 +6,7 @@ import (
 	"path"
 
 	"github.com/golang/glog"
+	cadvisorapi "github.com/google/cadvisor/info/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/kubernetes/pkg/api/v1"
@@ -19,14 +20,15 @@ import (
 const perm os.FileMode = 0777
 
 // ProbeVolumePlugins is the primary entrypoint for volume plugins.
-func ProbeVolumePlugins() []volume.VolumePlugin {
+func ProbeVolumePlugins(hinfo *cadvisorapi.MachineInfo) []volume.VolumePlugin {
 	return []volume.VolumePlugin{
-		&hugePagesPlugin{nil},
+		&hugePagesPlugin{nil, hinfo},
 	}
 }
 
 type hugePagesPlugin struct {
-	host volume.VolumeHost
+	host     volume.VolumeHost
+	hostInfo *cadvisorapi.MachineInfo
 }
 
 var _ volume.VolumePlugin = &hugePagesPlugin{}
@@ -59,6 +61,17 @@ func (plugin *hugePagesPlugin) GetVolumeName(spec *volume.Spec) (string, error) 
 }
 
 func (plugin *hugePagesPlugin) CanSupport(spec *volume.Spec) bool {
+	glog.Infof("######################### Can support: %q", plugin.hostInfo)
+	if plugin.hostInfo == nil {
+		return false
+	}
+	glog.Info("######################### Can support: %q", plugin.hostInfo.HugePagesTotal)
+
+	if plugin.hostInfo.HugePageSize <= 0 && plugin.hostInfo.HugePagesTotal <= 0 {
+		return false
+	}
+	glog.Info("######################### Can support")
+
 	if spec.Volume != nil && spec.Volume.HugePages != nil {
 		return true
 	}
