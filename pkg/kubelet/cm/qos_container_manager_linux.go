@@ -166,8 +166,8 @@ func (m *qosContainerManagerImpl) setCPUCgroupConfig(configs map[v1.PodQOSClass]
 	// make sure best effort is always 2 shares
 	bestEffortCPUShares := int64(MinShares)
 	configs[v1.PodQOSBestEffort].ResourceParameters.CpuShares = &bestEffortCPUShares
-	bestEffortCpuSetCpus := cmanager.GetQoSClassCpuset(v1.PodQOSBestEffort).String()
-	configs[v1.PodQOSBestEffort].ResourceParameters.CpusetCpus = &bestEffortCpuSetCpus
+	bestEffortCpusetCpus := cmanager.GetQoSClassCpuset(v1.PodQOSBestEffort).String()
+	configs[v1.PodQOSBestEffort].ResourceParameters.CpusetCpus = &bestEffortCpusetCpus
 
 	// set burstable shares based on current observe state
 	burstableCPUShares := MilliCPUToShares(burstablePodCPURequest)
@@ -175,8 +175,8 @@ func (m *qosContainerManagerImpl) setCPUCgroupConfig(configs map[v1.PodQOSClass]
 		burstableCPUShares = int64(MinShares)
 	}
 	configs[v1.PodQOSBurstable].ResourceParameters.CpuShares = &burstableCPUShares
-	burstableCpuSetCpus := cmanager.GetQoSClassCpuset(v1.PodQOSBurstable).String()
-	configs[v1.PodQOSBurstable].ResourceParameters.CpusetCpus = &burstableCpuSetCpus
+	burstableCpusetCpus := cmanager.GetQoSClassCpuset(v1.PodQOSBurstable).String()
+	configs[v1.PodQOSBurstable].ResourceParameters.CpusetCpus = &burstableCpusetCpus
 	return nil
 }
 
