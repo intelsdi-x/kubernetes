@@ -17,37 +17,30 @@ limitations under the License.
 package cpumanager
 
 import (
-	"k8s.io/kubernetes/pkg/api/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/kubernetes/pkg/api/v1"
 )
-
-
 
 type cpuNoopManager struct {
 	driver cpuDriver
 }
 
-
-func (cnm* cpuNoopManager) AddPod(pod *v1.Pod, qosClass v1.PodQOSClass) error {
+func (cnm *cpuNoopManager) AddPod(pod *v1.Pod, qosClass v1.PodQOSClass) error {
 	return nil
 }
 
-
-func (cnm* cpuNoopManager) DeletePod(pod *v1.Pod) error {
+func (cnm *cpuNoopManager) DeletePod(pod *v1.Pod) error {
 	return nil
 }
 
-
-func (cnm* cpuNoopManager) GetQoSClassCpuset(qosClass v1.PodQOSClass) cpuList {
+func (cnm *cpuNoopManager) GetQoSClassCpuset(qosClass v1.PodQOSClass) cpuList {
 	return ""
 }
 
-
-func (cnm* cpuNoopManager) GetPodCpuset(podUID types.UID) cpuList {
+func (cnm *cpuNoopManager) GetPodCpuset(podUID types.UID) cpuList {
 	return ""
 }
 
-
-func (cnm* cpuNoopManager) GetContainerCpuSet(podUID types.UID, containerName string) cpuList {
+func (cnm *cpuNoopManager) GetContainerCpuSet(podUID types.UID, containerName string) cpuList {
 	return ""
 }

@@ -313,14 +313,14 @@ func (ds *dockerService) UpdateRuntimeConfig(runtimeConfig *runtimeapi.RuntimeCo
 
 		runtimeResourceUpd := runtimeConfig.ResourceConfig.ResourceUpdate
 
-		containerUpdateConfig := dockercontainer.UpdateConfig {
-			Resources: dockercontainer.Resources {
-					CPUPeriod  : runtimeResourceUpd.CpuPeriod,
-					CPUQuota   : runtimeResourceUpd.CpuQuota,
-					CPUShares  : runtimeResourceUpd.CpuShares,
-					Memory     : runtimeResourceUpd.MemoryLimitInBytes,
-					CpusetCpus : runtimeResourceUpd.CpusetCpus,
-					CpusetMems : runtimeResourceUpd.CpusetMems,
+		containerUpdateConfig := dockercontainer.UpdateConfig{
+			Resources: dockercontainer.Resources{
+				CPUPeriod:  runtimeResourceUpd.CpuPeriod,
+				CPUQuota:   runtimeResourceUpd.CpuQuota,
+				CPUShares:  runtimeResourceUpd.CpuShares,
+				Memory:     runtimeResourceUpd.MemoryLimitInBytes,
+				CpusetCpus: runtimeResourceUpd.CpusetCpus,
+				CpusetMems: runtimeResourceUpd.CpusetMems,
 			},
 		}
 

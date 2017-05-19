@@ -29,8 +29,8 @@ import (
 
 	"k8s.io/kubernetes/pkg/api/v1"
 	"k8s.io/kubernetes/pkg/api/v1/resource"
-	"k8s.io/kubernetes/pkg/kubelet/qos"
 	"k8s.io/kubernetes/pkg/kubelet/cpumanager"
+	"k8s.io/kubernetes/pkg/kubelet/qos"
 )
 
 const (
@@ -148,7 +148,6 @@ func (m *qosContainerManagerImpl) setCPUCgroupConfig(configs map[v1.PodQOSClass]
 		pod := pods[i]
 		qosClass := qos.GetPodQOS(pod)
 
-
 		cmanager.AddPod(pod, qosClass)
 
 		if qosClass != v1.PodQOSBurstable {
@@ -167,7 +166,8 @@ func (m *qosContainerManagerImpl) setCPUCgroupConfig(configs map[v1.PodQOSClass]
 	// make sure best effort is always 2 shares
 	bestEffortCPUShares := int64(MinShares)
 	configs[v1.PodQOSBestEffort].ResourceParameters.CpuShares = &bestEffortCPUShares
-	configs[v1.PodQOSBestEffort].ResourceParameters.CpusetCpus = &cmanager.GetQoSClassCpuset(v1.PodQOSBestEffort).String()
+	bestEffortCpuSetCpus := cmanager.GetQoSClassCpuset(v1.PodQOSBestEffort).String()
+	configs[v1.PodQOSBestEffort].ResourceParameters.CpusetCpus = &bestEffortCpuSetCpus
 
 	// set burstable shares based on current observe state
 	burstableCPUShares := MilliCPUToShares(burstablePodCPURequest)
@@ -175,7 +175,8 @@ func (m *qosContainerManagerImpl) setCPUCgroupConfig(configs map[v1.PodQOSClass]
 		burstableCPUShares = int64(MinShares)
 	}
 	configs[v1.PodQOSBurstable].ResourceParameters.CpuShares = &burstableCPUShares
-	configs[v1.PodQOSBurstable].ResourceParameters.CpusetCpus = &cmanager.GetQoSClassCpuset(v1.PodQOSBurstable).String()
+	burstableCpuSetCpus := cmanager.GetQoSClassCpuset(v1.PodQOSBurstable).String()
+	configs[v1.PodQOSBurstable].ResourceParameters.CpusetCpus = &burstableCpuSetCpus
 	return nil
 }
 

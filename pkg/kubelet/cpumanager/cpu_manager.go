@@ -18,11 +18,11 @@ package cpumanager
 
 import (
 	"sync"
-	kubecontainer "k8s.io/kubernetes/pkg/kubelet/container"
-	"k8s.io/kubernetes/pkg/api/v1"
+
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/kubernetes/pkg/kubelet/cm"
+	"k8s.io/kubernetes/pkg/api/v1"
 	"k8s.io/kubernetes/pkg/kubelet/cadvisor"
+	kubecontainer "k8s.io/kubernetes/pkg/kubelet/container"
 )
 
 type cpuManagerName string
@@ -30,17 +30,15 @@ type cpuList string
 
 var (
 	cpuManagerSingleton CPUManager
-	oncePrepare sync.Once
-	cpuManagerType cpuManagerName = CPUManagerNoop
+	oncePrepare         sync.Once
+	cpuManagerType      cpuManagerName = CPUManagerNoop
 )
-
 
 const (
-	CPUManagerNoop     cpuManagerName = "noop"
-	CPUManagerStatic   cpuManagerName = "static"
-	CPUManagerDynamic  cpuManagerName = "dynamic"
+	CPUManagerNoop    cpuManagerName = "noop"
+	CPUManagerStatic  cpuManagerName = "static"
+	CPUManagerDynamic cpuManagerName = "dynamic"
 )
-
 
 type CPUManager interface {
 	AddPod(pod *v1.Pod, qosClass v1.PodQOSClass) error
@@ -51,8 +49,7 @@ type CPUManager interface {
 	GetContainerCpuSet(podUID types.UID, containerName string) cpuList
 }
 
-
-func NewCPUManager(name cpuManagerName, runtime kubecontainer.Runtime, cadvisor cadvisor.Interface, containerManager cm.ContainerManager) (CPUManager, error) {
+func NewCPUManager(name cpuManagerName, runtime kubecontainer.Runtime, cadvisor cadvisor.Interface) (CPUManager, error) {
 	oncePrepare.Do(func() {
 		cpuManagerType = name
 		switch cpuManagerType {
@@ -61,19 +58,17 @@ func NewCPUManager(name cpuManagerName, runtime kubecontainer.Runtime, cadvisor 
 		case CPUManagerStatic:
 			cpuManagerSingleton = &cpuStaticManager{
 				containerRuntime: runtime,
-				driver: NewCPUDriver(cadvisor),
-				containerManager: containerManager,
+				driver:           NewCPUDriver(cadvisor),
 			}
 		}
 	})
 	return cpuManagerSingleton, nil
 }
 
-
 func GetCPUManagerSingleton() CPUManager {
 	return cpuManagerSingleton
 }
 
-func (c cpuList) String() string{
+func (c cpuList) String() string {
 	return string(c)
 }

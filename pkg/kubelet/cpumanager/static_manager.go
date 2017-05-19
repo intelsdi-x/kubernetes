@@ -18,51 +18,44 @@ package cpumanager
 
 import (
 	"sync"
-	kubecontainer "k8s.io/kubernetes/pkg/kubelet/container"
-	"k8s.io/kubernetes/pkg/api/v1"
-	"k8s.io/kubernetes/pkg/kubelet/cm"
-	"k8s.io/apimachinery/pkg/types"
 
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/kubernetes/pkg/api/v1"
+	kubecontainer "k8s.io/kubernetes/pkg/kubelet/container"
 )
 
 type cpuStaticManager struct {
 	sync.Mutex
 	containerRuntime kubecontainer.Runtime
-	containerManager cm.ContainerManager
-	driver cpuDriver
+	driver           *cpuDriver
 }
 
-
-func (csm* cpuStaticManager) AddPod(pod *v1.Pod, qosClass v1.PodQOSClass) error {
+func (csm *cpuStaticManager) AddPod(pod *v1.Pod, qosClass v1.PodQOSClass) error {
 	csm.Lock()
 	defer csm.Unlock()
 	//TODO(SCc) Add pod to list
 	// check if new pod or already on the list - if new then :
-		// if pod needs exclusive core find free and start eviction
-		// if not mark as using shared pool
+	// if pod needs exclusive core find free and start eviction
+	// if not mark as using shared pool
 	// if not new, already on the list exit
 	return nil
 }
 
-
-func (csm* cpuStaticManager) DeletePod(pod *v1.Pod) error {
+func (csm *cpuStaticManager) DeletePod(pod *v1.Pod) error {
 	csm.Lock()
 	defer csm.Unlock()
 	return nil
 }
 
-
-func (csm* cpuStaticManager) GetQoSClassCpuset(qosClass v1.PodQOSClass) cpuList {
+func (csm *cpuStaticManager) GetQoSClassCpuset(qosClass v1.PodQOSClass) cpuList {
 	//TODO (SSc) Return string of available CPUs for QoS class
 	return ""
 }
 
-
-func (csm* cpuStaticManager) GetPodCpuset(podUID types.UID) cpuList {
+func (csm *cpuStaticManager) GetPodCpuset(podUID types.UID) cpuList {
 	return ""
 }
 
-
-func (csm* cpuStaticManager) GetContainerCpuSet(podUID types.UID, containerName string) cpuList {
+func (csm *cpuStaticManager) GetContainerCpuSet(podUID types.UID, containerName string) cpuList {
 	return ""
 }

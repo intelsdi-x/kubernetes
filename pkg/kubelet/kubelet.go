@@ -62,6 +62,7 @@ import (
 	"k8s.io/kubernetes/pkg/kubelet/cm"
 	"k8s.io/kubernetes/pkg/kubelet/config"
 	kubecontainer "k8s.io/kubernetes/pkg/kubelet/container"
+	"k8s.io/kubernetes/pkg/kubelet/cpumanager"
 	"k8s.io/kubernetes/pkg/kubelet/dockershim"
 	dockerremote "k8s.io/kubernetes/pkg/kubelet/dockershim/remote"
 	"k8s.io/kubernetes/pkg/kubelet/dockertools"
@@ -103,7 +104,6 @@ import (
 	"k8s.io/kubernetes/pkg/util/oom"
 	"k8s.io/kubernetes/pkg/volume"
 	"k8s.io/kubernetes/plugin/pkg/scheduler/algorithm/predicates"
-	"k8s.io/kubernetes/pkg/kubelet/cpumanager"
 )
 
 const (
@@ -649,7 +649,7 @@ func NewMainKubelet(kubeCfg *componentconfig.KubeletConfiguration, kubeDeps *Kub
 
 	//TODO(SSc)Add check for qos-per-cgroup flags and so on, also move creation somewhere else
 	//Right now only CRI with docker shim are supported
-	klet.cpuManager, err = cpumanager.NewCPUManager(cpumanager.CPUManagerNoop, klet.containerRuntime, klet.cadvisor , klet.containerManager)
+	klet.cpuManager, err = cpumanager.NewCPUManager(cpumanager.CPUManagerNoop, klet.containerRuntime, klet.cadvisor)
 	if err != nil {
 		return nil, fmt.Errorf("Could not initialize CPU manger")
 	}

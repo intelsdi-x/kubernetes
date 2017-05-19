@@ -26,11 +26,10 @@ type cpuDriver struct {
 	topology []cadvisorapi.Node
 }
 
-
-func NewCPUDriver(cadvisor cadvisor.Interface) cpuDriver {
+func NewCPUDriver(cadvisor cadvisor.Interface) *cpuDriver {
 	var info *cadvisorapi.MachineInfo
 	var err error
-	cpud := cpuDriver{
+	cpud := &cpuDriver{
 		cadvisor: cadvisor,
 	}
 
