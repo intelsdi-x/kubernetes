@@ -46,6 +46,8 @@ var (
 	// size of hugepages on machine
 	hugepageSizeRegExp  = regexp.MustCompile(`^Hugepagesize:\s*([0-9]+) kB`)
 	hugepageTotalRegExp = regexp.MustCompile(`^HugePages_Total:\s*([0-9]+)$`)
+	hugepageFreeRegExp  = regexp.MustCompile(`^HugePages_Free:\s*([0-9]+)$`)
+	hugepageRsvdRegExp  = regexp.MustCompile(`^HugePages_Rsvd:\s*([0-9]+)$`)
 )
 
 const maxFreqFile = "/sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_max_freq"
@@ -125,6 +127,40 @@ func GetHugePageSize(meminfo string) (uint64, error) {
 		ok, val, err := extractValue(line, hugepageSizeRegExp)
 		if err != nil {
 			return uint64(0), fmt.Errorf("could not parse huge page size from %q: %v", line, err)
+		}
+		if ok {
+			return uint64(val), err
+		}
+	}
+	return uint64(0), nil
+}
+
+// GetHugePageFree returns the machine's huge page free from /proc/meminfo.
+func GetHugePageFree(meminfo string) (uint64, error) {
+	for _, line := range strings.Split(string(meminfo), "\n") {
+		if line == "" {
+			continue
+		}
+		ok, val, err := extractValue(line, hugepageFreeRegExp)
+		if err != nil {
+			return uint64(0), fmt.Errorf("could not parse huge page free from %q: %v", line, err)
+		}
+		if ok {
+			return uint64(val), err
+		}
+	}
+	return uint64(0), nil
+}
+
+// GetHugePageRsvd returns the machine's huge page rsvd from /proc/meminfo.
+func GetHugePageRsvd(meminfo string) (uint64, error) {
+	for _, line := range strings.Split(string(meminfo), "\n") {
+		if line == "" {
+			continue
+		}
+		ok, val, err := extractValue(line, hugepageRsvdRegExp)
+		if err != nil {
+			return uint64(0), fmt.Errorf("could not parse huge page rsvd from %q: %v", line, err)
 		}
 		if ok {
 			return uint64(val), err

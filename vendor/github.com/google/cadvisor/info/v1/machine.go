@@ -162,6 +162,14 @@ type MachineInfo struct {
 	// TODO: this should be a slice of supported sizes.
 	HugePagesTotal uint64 `json:"hugepages_total"`
 
+	// The number of available hugepage of the default size on this machine.
+	// TODO: this should be a slice of supported sizes
+	HugePageFree uint64 `json:"hugepage_size"`
+
+	// The number of reserved hugepage of the default size on this machine.
+	// TODO: this should be a slice of supported sizes.
+	HugePagesRsvd uint64 `json:"hugepages_total"`
+
 	// The machine id
 	MachineID string `json:"machine_id"`
 

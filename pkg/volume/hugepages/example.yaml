@@ -17,4 +17,5 @@ spec:
     hugePages: 
       pageSize: "2M"
       size: "200M"
+      minSize: "100M"
   hostNetwork: true

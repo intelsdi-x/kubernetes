@@ -81,6 +81,16 @@ func Info(sysFs sysfs.SysFs, fsInfo fs.FsInfo, inHostNamespace bool) (*info.Mach
 	if err != nil {
 		glog.Errorf("Failed to get hugepages total information: %v", err)
 	}
+
+	hugepageFree, err := GetHugePageFree(string(meminfo))
+	if err != nil {
+		glog.Errorf("Failed to get hugepage free information: %v", err)
+	}
+	hugepageRsvd, err := GetHugePageRsvd(string(meminfo))
+	if err != nil {
+		glog.Errorf("Failed to get hugepage rsvd information: %v", err)
+	}
+
 	glog.Infof("FOUND HUGEPAGE SIZE: %v", hugepageSize)
 	glog.Infof("FOUND HUGEPAGES TOTAL: %v", hugepagesTotal)
 
@@ -129,6 +139,8 @@ func Info(sysFs sysfs.SysFs, fsInfo fs.FsInfo, inHostNamespace bool) (*info.Mach
 		InstanceID:     instanceID,
 		HugePageSize:   hugepageSize,
 		HugePagesTotal: hugepagesTotal,
+		HugePageFree:   hugepageFree,
+		HugePagesRsvd:  hugepageRsvd,
 	}
 
 	for i := range filesystems {
@@ -141,6 +153,39 @@ func Info(sysFs sysfs.SysFs, fsInfo fs.FsInfo, inHostNamespace bool) (*info.Mach
 	}
 
 	return machineInfo, nil
+}
+
+func UpdateHugePages(machineInfo *info.MachineInfo) error {
+	rootFs := "/"
+	meminfo, err := ioutil.ReadFile(filepath.Join(rootFs, "/proc/meminfo"))
+	if err != nil {
+		return err
+	}
+
+	hugepageSize, err := GetHugePageSize(string(meminfo))
+	if err != nil {
+		glog.Errorf("Failed to get hugepage size information: %v", err)
+	}
+	hugepagesTotal, err := GetHugePagesTotal(string(meminfo))
+	if err != nil {
+		glog.Errorf("Failed to get hugepages total information: %v", err)
+	}
+
+	hugepageFree, err := GetHugePageFree(string(meminfo))
+	if err != nil {
+		glog.Errorf("Failed to get hugepage free information: %v", err)
+	}
+	hugepageRsvd, err := GetHugePageRsvd(string(meminfo))
+	if err != nil {
+		glog.Errorf("Failed to get hugepage rsvd information: %v", err)
+	}
+
+	machineInfo.HugePageSize = hugepageSize
+	machineInfo.HugePagesTotal = hugepagesTotal
+	machineInfo.HugePageFree = hugepageFree
+	machineInfo.HugePagesRsvd = hugepageRsvd
+
+	return nil
 }
 
 func ContainerOsVersion() string {

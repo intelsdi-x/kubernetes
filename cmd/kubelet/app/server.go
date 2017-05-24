@@ -34,7 +34,6 @@ import (
 	"time"
 
 	"github.com/golang/glog"
-	cadvisorapi "github.com/google/cadvisor/info/v1"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 
@@ -128,7 +127,7 @@ HTTP server: The kubelet can also listen for HTTP and respond to a simple API
 
 // UnsecuredKubeletDeps returns a KubeletDeps suitable for being run, or an error if the server setup
 // is not valid.  It will not start any background processes, and does not include authentication/authorization
-func UnsecuredKubeletDeps(s *options.KubeletServer, hinfo *cadvisorapi.MachineInfo) (*kubelet.KubeletDeps, error) {
+func UnsecuredKubeletDeps(s *options.KubeletServer, cadvisorInterface cadvisor.Interface) (*kubelet.KubeletDeps, error) {
 	// Initialize the TLS Options
 	tlsOptions, err := InitializeTLS(&s.KubeletFlags, &s.KubeletConfiguration)
 	if err != nil {
@@ -164,7 +163,7 @@ func UnsecuredKubeletDeps(s *options.KubeletServer, hinfo *cadvisorapi.MachineIn
 		OOMAdjuster:        oom.NewOOMAdjuster(),
 		OSInterface:        kubecontainer.RealOS{},
 		Writer:             writer,
-		VolumePlugins:      ProbeVolumePlugins(s.VolumePluginDir, hinfo),
+		VolumePlugins:      ProbeVolumePlugins(s.VolumePluginDir, cadvisorInterface),
 		TLSOptions:         tlsOptions,
 	}, nil
 }
@@ -417,7 +416,12 @@ func run(s *options.KubeletServer, kubeDeps *kubelet.KubeletDeps) (err error) {
 		return err
 	}
 
-	var hostInfo *cadvisorapi.MachineInfo
+	cAdvisorInterface, err := cadvisor.New(uint(s.CAdvisorPort), s.ContainerRuntime, s.RootDirectory)
+	if err != nil {
+		return err
+	}
+
+	glog.Infof("####################!!!!!!!!!!!!!!!!!!!!! %v %v %v %v", kubeDeps, s.CAdvisorPort, s.ContainerRuntime, s.RootDirectory)
 
 	if kubeDeps == nil {
 		var kubeClient clientset.Interface
@@ -475,7 +479,12 @@ func run(s *options.KubeletServer, kubeDeps *kubelet.KubeletDeps) (err error) {
 			}
 		}
 
-		kubeDeps, err = UnsecuredKubeletDeps(s, hostInfo)
+		//machineInfo, err := cAdvisorInterface.MachineInfo()
+		//if err != nil {
+		//	return err
+		//}
+
+		kubeDeps, err = UnsecuredKubeletDeps(s, cAdvisorInterface)
 		if err != nil {
 			return err
 		}
@@ -500,14 +509,7 @@ func run(s *options.KubeletServer, kubeDeps *kubelet.KubeletDeps) (err error) {
 	}
 
 	if kubeDeps.CAdvisorInterface == nil {
-		kubeDeps.CAdvisorInterface, err = cadvisor.New(uint(s.CAdvisorPort), s.ContainerRuntime, s.RootDirectory)
-		if err != nil {
-			return err
-		}
-	}
-	hostInfo, err = kubeDeps.CAdvisorInterface.MachineInfo()
-	if err != nil {
-		return err
+		kubeDeps.CAdvisorInterface = cAdvisorInterface
 	}
 
 	// Setup event recorder if required.

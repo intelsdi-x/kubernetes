@@ -4,12 +4,14 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"strconv"
 
 	"github.com/golang/glog"
-	cadvisorapi "github.com/google/cadvisor/info/v1"
+	"github.com/google/cadvisor/machine"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/kubernetes/pkg/api/v1"
+	"k8s.io/kubernetes/pkg/kubelet/cadvisor"
 	"k8s.io/kubernetes/pkg/util/mount"
 	"k8s.io/kubernetes/pkg/util/strings"
 	"k8s.io/kubernetes/pkg/volume"
@@ -20,15 +22,15 @@ import (
 const perm os.FileMode = 0777
 
 // ProbeVolumePlugins is the primary entrypoint for volume plugins.
-func ProbeVolumePlugins(hinfo *cadvisorapi.MachineInfo) []volume.VolumePlugin {
+func ProbeVolumePlugins(cadvisorInterface cadvisor.Interface) []volume.VolumePlugin {
 	return []volume.VolumePlugin{
-		&hugePagesPlugin{nil, hinfo},
+		&hugePagesPlugin{nil, cadvisorInterface},
 	}
 }
 
 type hugePagesPlugin struct {
-	host     volume.VolumeHost
-	hostInfo *cadvisorapi.MachineInfo
+	host              volume.VolumeHost
+	cadvisorInterface cadvisor.Interface
 }
 
 var _ volume.VolumePlugin = &hugePagesPlugin{}
@@ -60,17 +62,67 @@ func (plugin *hugePagesPlugin) GetVolumeName(spec *volume.Spec) (string, error) 
 	return spec.Name(), nil
 }
 
-func (plugin *hugePagesPlugin) CanSupport(spec *volume.Spec) bool {
-	glog.Infof("######################### Can support: %q", plugin.hostInfo)
-	if plugin.hostInfo == nil {
-		return false
+func toBytes(value string) (int, error) {
+	size, err := strconv.Atoi(value[:len(value)-1])
+	if err != nil {
+		return -1, err
 	}
-	glog.Info("######################### Can support: %q", plugin.hostInfo.HugePagesTotal)
+	kind := value[len(value)-1:]
+	switch kind {
+	case "K":
+		return size * 1024, nil
+	case "M":
+		return size * 1024 * 1024, nil
+	case "G":
+		return size * 1024 * 1024 * 1024, nil
+	}
+	return -1, fmt.Errorf("cannot decode kind")
+}
 
-	if plugin.hostInfo.HugePageSize <= 0 && plugin.hostInfo.HugePagesTotal <= 0 {
+func (plugin *hugePagesPlugin) CanSupport(spec *volume.Spec) bool {
+	if plugin.cadvisorInterface == nil {
+		glog.Warning("cadvisor hasn't been passed")
 		return false
 	}
-	glog.Info("######################### Can support")
+
+	hostInfo, err := plugin.cadvisorInterface.MachineInfo()
+	if err != nil {
+		glog.Warning("cannot gather machine info")
+		return false
+	}
+
+	if err = machine.UpdateHugePages(hostInfo); err != nil {
+		glog.Warningf("Cannot update hugepages size")
+		return false
+	}
+
+	if hostInfo.HugePageSize <= 0 {
+		glog.Warning("Wrong hugepage size")
+		return false
+	}
+
+	if hostInfo.HugePagesTotal <= 0 {
+		glog.Warning("No hugepages available")
+		return false
+	}
+
+	availableHugePages := (int)(hostInfo.HugePagesTotal - hostInfo.HugePagesRsvd)
+	requestedTotalHugePagesSize, err := toBytes(spec.Volume.HugePages.MinSize)
+	if err != nil {
+		return false
+	}
+
+	requestedPageSize, err := toBytes(spec.Volume.HugePages.PageSize)
+	if err != nil {
+		return false
+	}
+	glog.Infof("############################################################# HPR: %v, HPT: %v", hostInfo.HugePagesRsvd, hostInfo.HugePagesTotal)
+	glog.Infof("############################################################# AHP: %v, RPS: %v, RTHPS: %v", availableHugePages, requestedPageSize, requestedTotalHugePagesSize)
+
+	if availableHugePages-(requestedTotalHugePagesSize/requestedPageSize) < 0 {
+		glog.Warning("Cannot reserve this amount of hugepages on this host")
+		return false
+	}
 
 	if spec.Volume != nil && spec.Volume.HugePages != nil {
 		return true
