@@ -19,11 +19,13 @@ package hugepagesmounter
 import (
 	"fmt"
 	"io"
+	"strconv"
+	"strings"
 
 	"github.com/golang/glog"
 
-	"github.com/pborman/uuid"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apiserver/pkg/admission"
 	"k8s.io/kubernetes/pkg/api"
 	kubeapiserveradmission "k8s.io/kubernetes/pkg/kubeapiserver/admission"
@@ -67,36 +69,77 @@ func (c *hugePagesMounterPlugin) Admit(a admission.Attributes) error {
 		return errors.NewBadRequest("Resource was marked with kind Pod but was unable to be converted")
 	}
 
-	for index, container := range pod.Spec.Containers {
-		if hugePage, found := container.Resources.Requests[api.ResourceName("alpha.kubernetes.io/hugepages-2048kB")]; found {
-			uid := uuid.New()
-			pod.Spec.Volumes = append(pod.Spec.Volumes, api.Volume{
-				Name: generateVolumeName(index, uid),
-				VolumeSource: api.VolumeSource{
-					HugePages: &api.HugePagesVolumeSource{
-						PageSize: "2M",
-						MaxSize:  calculateMaxSize(hugePage.Value(), 2),
-						MinSize:  "2M",
-					},
-				},
-			},
-			)
+	for _, volume := range pod.Spec.Volumes {
+		if volume.HugePages != nil {
+			hugepagesCount, err := calculatePagesCount(volume.HugePages.MaxSize)
+			if err != nil {
+				return fmt.Errorf("Cannot calculate hugePages size for %v : %v", volume.Name, err)
+			}
+			modifyContainers(hugepagesCount, pod.Spec.Containers, volume.Name)
 
-			pod.Spec.Containers[index].VolumeMounts = append(pod.Spec.Containers[index].VolumeMounts, api.VolumeMount{
-				Name:      generateVolumeName(index, uid),
-				MountPath: "/hugepages",
-			})
-			glog.V(4).Info("Added hugePagesMount according to requests")
 		}
-
 	}
+
 	return nil
 }
 
-func generateVolumeName(index int, uid string) string {
-	return fmt.Sprintf("hugepagesmounterplugin-%s-%d", uid, index)
+func modifyContainers(hugepagesCount int64, containers []api.Container, volumeName string) {
+	for containerID := range containers {
+		if containerHasHugepagesVolume(volumeName, containers[containerID]) {
+			requests := containers[containerID].Resources.Requests
+			if requests == nil {
+				requests = make(api.ResourceList)
+			}
+			hugePagesResourceName := api.ResourceName("alpha.kubernetes.io/hugepages-2048kB")
+			hugePage, found := requests[hugePagesResourceName]
+			newValue := hugepagesCount
+			if found {
+				newValue += hugePage.Value()
+			}
+
+			requests[hugePagesResourceName] = *resource.NewQuantity(newValue, resource.DecimalSI)
+			// make sure we store new request in case it was empty
+
+			glog.Infof("Request is : %#v\n", requests)
+			containers[containerID].Resources.Requests = requests
+		}
+	}
 }
 
-func calculateMaxSize(pagesNum int64, pageSize int64) string {
-	return fmt.Sprintf("%dM", pagesNum*pageSize)
+func containerHasHugepagesVolume(volumeName string, container api.Container) bool {
+	for _, containerVolume := range container.VolumeMounts {
+		if containerVolume.Name == volumeName {
+			return true
+		}
+	}
+	return false
+}
+
+func calculatePagesCount(maxSize string) (int64, error) {
+	// TODO(pprokop): add support for other sizes
+	glog.Infof("-----------Last char: %s\n", string(maxSize[len(maxSize)-1]))
+	if !strings.Contains("mM", string(maxSize[len(maxSize)-1])) {
+		return 0, fmt.Errorf("Not supported size of HugePages not: %v", maxSize[len(maxSize)-1])
+	}
+	glog.Infof("-------------------------------maxSize: %s", maxSize)
+
+	size, err := strconv.Atoi(maxSize[:len(maxSize)-1])
+
+	if err != nil {
+		return int64(size), fmt.Errorf("Only available sizes are m and M not: %v", maxSize)
+	}
+
+	glog.Infof("SIze is : %v\n", size)
+
+	size1 := convertMaxSizeTo2MHugePages(size)
+	glog.Infof("SIze1 is : %v\n", size1)
+	return size1, nil
+
+}
+
+func convertMaxSizeTo2MHugePages(maxSize int) int64 {
+	if maxSize%2 != 0 {
+		return int64((maxSize + 1) / 2)
+	}
+	return int64(maxSize / 2)
 }
