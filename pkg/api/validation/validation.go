@@ -616,8 +616,25 @@ func validateGitRepoVolumeSource(gitRepo *api.GitRepoVolumeSource, fldPath *fiel
 func validateHugePagesVolumeSource(hugePages *api.HugePagesVolumeSource, fldPath *field.Path) field.ErrorList {
 	allErrs := field.ErrorList{}
 	glog.Infof("PageSIze is: %v", hugePages.PageSize)
-	if hugePages.PageSize != "2M" && hugePages.PageSize != "1G" {
+	// We only support 2M pageSize
+	if hugePages.PageSize != "2M" {
 		allErrs = append(allErrs, field.Invalid(fldPath.Child("pageSize"), hugePages.PageSize, "Not supported page size"))
+	}
+	maxSize, err := resource.ParseQuantity(hugePages.MaxSize)
+	if err != nil {
+		allErrs = append(allErrs, field.Invalid(fldPath.Child("maxSize"), hugePages.MaxSize, "Not a valid quantity"))
+	} else {
+		if maxSize.ScaledValue(resource.Mega) < 2 {
+			allErrs = append(allErrs, field.Invalid(fldPath.Child("maxSize"), hugePages.MaxSize, "MaxSize lower than pageSize"))
+		}
+	}
+	minSize, err := resource.ParseQuantity(hugePages.MinSize)
+	if err != nil {
+		allErrs = append(allErrs, field.Invalid(fldPath.Child("minSize"), hugePages.MinSize, "Not a valid quantity"))
+	} else {
+		if minSize.ScaledValue(resource.Mega) < 2 {
+			allErrs = append(allErrs, field.Invalid(fldPath.Child("minSize"), hugePages.MinSize, "MaxSize lower than pageSize"))
+		}
 	}
 	return allErrs
 }
