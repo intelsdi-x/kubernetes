@@ -9,24 +9,28 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/kubernetes/pkg/api/v1"
+	"k8s.io/kubernetes/pkg/kubelet/cadvisor"
 	"k8s.io/kubernetes/pkg/util/mount"
 	"k8s.io/kubernetes/pkg/util/strings"
 	"k8s.io/kubernetes/pkg/volume"
 	volumeutil "k8s.io/kubernetes/pkg/volume/util"
+	//"k8s.io/kubernetes/staging/src/k8s.io/apimachinery/pkg/api/resource"
 )
 
 // http://issue.k8s.io/2630
 const perm os.FileMode = 0777
 
 // ProbeVolumePlugins is the primary entrypoint for volume plugins.
-func ProbeVolumePlugins() []volume.VolumePlugin {
+func ProbeVolumePlugins(p cadvisor.Interface) []volume.VolumePlugin {
+
 	return []volume.VolumePlugin{
-		&hugePagesPlugin{nil},
+		&hugePagesPlugin{nil, p},
 	}
 }
 
 type hugePagesPlugin struct {
-	host volume.VolumeHost
+	host     volume.VolumeHost
+	cadvisor cadvisor.Interface
 }
 
 var _ volume.VolumePlugin = &hugePagesPlugin{}
@@ -59,7 +63,18 @@ func (plugin *hugePagesPlugin) GetVolumeName(spec *volume.Spec) (string, error) 
 }
 
 func (plugin *hugePagesPlugin) CanSupport(spec *volume.Spec) bool {
+	machineInfo, err := plugin.cadvisor.MachineInfo()
+	if err != nil {
+		return false
+	}
+	totalHP := int(machineInfo.HugePagesTotal)
+
+	if totalHP <= 0 {
+		return false
+	}
+
 	if spec.Volume != nil && spec.Volume.HugePages != nil {
+		//plugin.allocated += toAllocate
 		return true
 	}
 	return false

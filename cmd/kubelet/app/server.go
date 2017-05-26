@@ -128,7 +128,7 @@ HTTP server: The kubelet can also listen for HTTP and respond to a simple API
 
 // UnsecuredKubeletDeps returns a KubeletDeps suitable for being run, or an error if the server setup
 // is not valid.  It will not start any background processes, and does not include authentication/authorization
-func UnsecuredKubeletDeps(s *options.KubeletServer) (*kubelet.KubeletDeps, error) {
+func UnsecuredKubeletDeps(s *options.KubeletServer, cadvisorInterface cadvisor.Interface) (*kubelet.KubeletDeps, error) {
 	// Initialize the TLS Options
 	tlsOptions, err := InitializeTLS(&s.KubeletFlags, &s.KubeletConfiguration)
 	if err != nil {
@@ -164,7 +164,7 @@ func UnsecuredKubeletDeps(s *options.KubeletServer) (*kubelet.KubeletDeps, error
 		OOMAdjuster:        oom.NewOOMAdjuster(),
 		OSInterface:        kubecontainer.RealOS{},
 		Writer:             writer,
-		VolumePlugins:      ProbeVolumePlugins(s.VolumePluginDir),
+		VolumePlugins:      ProbeVolumePlugins(s.VolumePluginDir, cadvisorInterface),
 		TLSOptions:         tlsOptions,
 	}, nil
 }
@@ -417,6 +417,11 @@ func run(s *options.KubeletServer, kubeDeps *kubelet.KubeletDeps) (err error) {
 		return err
 	}
 
+	cadvisorInterface, err := cadvisor.New(uint(s.CAdvisorPort), s.ContainerRuntime, s.RootDirectory)
+	if err != nil {
+		return err
+	}
+
 	if kubeDeps == nil {
 		var kubeClient clientset.Interface
 		var eventClient v1core.EventsGetter
@@ -473,7 +478,9 @@ func run(s *options.KubeletServer, kubeDeps *kubelet.KubeletDeps) (err error) {
 			}
 		}
 
-		kubeDeps, err = UnsecuredKubeletDeps(s)
+
+
+		kubeDeps, err = UnsecuredKubeletDeps(s, cadvisorInterface)
 		if err != nil {
 			return err
 		}
@@ -498,10 +505,8 @@ func run(s *options.KubeletServer, kubeDeps *kubelet.KubeletDeps) (err error) {
 	}
 
 	if kubeDeps.CAdvisorInterface == nil {
-		kubeDeps.CAdvisorInterface, err = cadvisor.New(uint(s.CAdvisorPort), s.ContainerRuntime, s.RootDirectory)
-		if err != nil {
-			return err
-		}
+		kubeDeps.CAdvisorInterface = cadvisorInterface
+
 	}
 
 	// Setup event recorder if required.
