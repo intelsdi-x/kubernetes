@@ -14,7 +14,6 @@ import (
 	"k8s.io/kubernetes/pkg/util/strings"
 	"k8s.io/kubernetes/pkg/volume"
 	volumeutil "k8s.io/kubernetes/pkg/volume/util"
-	//"k8s.io/kubernetes/staging/src/k8s.io/apimachinery/pkg/api/resource"
 )
 
 // http://issue.k8s.io/2630
@@ -74,7 +73,6 @@ func (plugin *hugePagesPlugin) CanSupport(spec *volume.Spec) bool {
 	}
 
 	if spec.Volume != nil && spec.Volume.HugePages != nil {
-		//plugin.allocated += toAllocate
 		return true
 	}
 	return false
