@@ -252,7 +252,7 @@ func GetTopology(sysFs sysfs.SysFs, cpuinfo string) ([]info.Node, int, error) {
 	return nodes, numCores, nil
 }
 
-func extractValue(s string, r *regexp.Regexp) (bool, int, error) {
+func  extractValue(s string, r *regexp.Regexp) (bool, int, error) {
 	matches := r.FindSubmatch([]byte(s))
 	if len(matches) == 2 {
 		val, err := strconv.ParseInt(string(matches[1]), 10, 32)

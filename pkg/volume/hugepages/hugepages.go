@@ -2,35 +2,35 @@ package hugepages
 
 import (
 	"fmt"
+	"io/ioutil"
 	"os"
 	"path"
+	str "strings"
 
 	"github.com/golang/glog"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/kubernetes/pkg/api/v1"
-	"k8s.io/kubernetes/pkg/kubelet/cadvisor"
 	"k8s.io/kubernetes/pkg/util/mount"
 	"k8s.io/kubernetes/pkg/util/strings"
 	"k8s.io/kubernetes/pkg/volume"
 	volumeutil "k8s.io/kubernetes/pkg/volume/util"
-	//"k8s.io/kubernetes/staging/src/k8s.io/apimachinery/pkg/api/resource"
+	"strconv"
 )
 
 // http://issue.k8s.io/2630
 const perm os.FileMode = 0777
 
 // ProbeVolumePlugins is the primary entrypoint for volume plugins.
-func ProbeVolumePlugins(p cadvisor.Interface) []volume.VolumePlugin {
+func ProbeVolumePlugins() []volume.VolumePlugin {
 
 	return []volume.VolumePlugin{
-		&hugePagesPlugin{nil, p},
+		&hugePagesPlugin{nil},
 	}
 }
 
 type hugePagesPlugin struct {
-	host     volume.VolumeHost
-	cadvisor cadvisor.Interface
+	host volume.VolumeHost
 }
 
 var _ volume.VolumePlugin = &hugePagesPlugin{}
@@ -62,14 +62,32 @@ func (plugin *hugePagesPlugin) GetVolumeName(spec *volume.Spec) (string, error) 
 	return spec.Name(), nil
 }
 
-func (plugin *hugePagesPlugin) CanSupport(spec *volume.Spec) bool {
-	machineInfo, err := plugin.cadvisor.MachineInfo()
-	if err != nil {
-		return false
-	}
-	totalHP := int(machineInfo.HugePagesTotal)
+func detectHugepages() (value int) {
 
-	if totalHP <= 0 {
+	data, err := ioutil.ReadFile("/proc/meminfo")
+	if err != nil {
+		return
+	}
+
+	for _, line := range str.Split(string(data), "\n") {
+		glog.Info(line)
+		if str.HasPrefix(line, "HugePages_Total") {
+			lineSplitted := str.Split(line, ":")
+			if len(lineSplitted) != 2 {
+				return
+			}
+			value, err = strconv.Atoi(str.TrimSpace(lineSplitted[1]))
+			if err != nil {
+				value = -1
+			}
+			break
+		}
+	}
+	return
+}
+
+func (plugin *hugePagesPlugin) CanSupport(spec *volume.Spec) bool {
+	if detectHugepages() <= 0 {
 		return false
 	}
 
