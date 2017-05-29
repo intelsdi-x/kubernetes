@@ -28,8 +28,9 @@ import (
 )
 
 const (
-	annotationPrefix = "hugepagesvolumeresources.admission.kubernetes.io"
-	pluginName       = "hugepagesVolumeResources"
+	hugepagesResource = "alpha.kubernetes.io/hugepages-2048kB"
+	annotationPrefix  = "hugepagesvolumeresources.admission.kubernetes.io"
+	pluginName        = "hugepagesVolumeResources"
 )
 
 func init() {
@@ -69,7 +70,14 @@ func (c *hugePagesMounterPlugin) Admit(a admission.Attributes) error {
 			if err != nil {
 				return fmt.Errorf("Cannot calculate hugePages size for %v : %v", volume.Name, err)
 			}
+
 			fillResourcesFor(pod.Spec.Containers, volume.Name, hugepagesCount)
+
+			if pod.ObjectMeta.Annotations == nil {
+				pod.ObjectMeta.Annotations = map[string]string{}
+			}
+			// adding annotation
+			pod.ObjectMeta.Annotations[fmt.Sprintf("%s/%s", annotationPrefix, volume.Name)] = hugepagesResource
 
 		}
 	}
@@ -85,7 +93,7 @@ func fillResourcesFor(containers []api.Container, volumeName string, hugepagesCo
 			if requests == nil {
 				requests = make(api.ResourceList)
 			}
-			hugePagesResourceName := api.ResourceName("alpha.kubernetes.io/hugepages-2048kB")
+			hugePagesResourceName := api.ResourceName(hugepagesResource)
 			hugePage, found := requests[hugePagesResourceName]
 			newValue := hugepagesCount
 			if found {
