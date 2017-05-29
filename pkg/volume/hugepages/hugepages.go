@@ -23,7 +23,6 @@ const perm os.FileMode = 0777
 
 // ProbeVolumePlugins is the primary entrypoint for volume plugins.
 func ProbeVolumePlugins() []volume.VolumePlugin {
-
 	return []volume.VolumePlugin{
 		&hugePagesPlugin{nil},
 	}
@@ -63,7 +62,6 @@ func (plugin *hugePagesPlugin) GetVolumeName(spec *volume.Spec) (string, error) 
 }
 
 func detectHugepages() (value int) {
-
 	data, err := ioutil.ReadFile("/proc/meminfo")
 	if err != nil {
 		return
@@ -90,7 +88,6 @@ func (plugin *hugePagesPlugin) CanSupport(spec *volume.Spec) bool {
 	if detectHugepages() <= 0 {
 		return false
 	}
-
 	if spec.Volume != nil && spec.Volume.HugePages != nil {
 		return true
 	}
