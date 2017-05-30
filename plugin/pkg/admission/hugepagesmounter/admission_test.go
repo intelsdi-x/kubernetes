@@ -122,12 +122,11 @@ func TestAdmitPod(t *testing.T) {
 		Handler: admission.NewHandler(admission.Create, admission.Update),
 	}
 
-	// TODO(pprokop): add failing test
-	var tests = []struct {
+	var tests = map[string]struct {
 		pod        *api.Pod
 		shouldFail bool
 	}{
-		{
+		"good one": {
 			pod: &api.Pod{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "mypod",
@@ -163,10 +162,46 @@ func TestAdmitPod(t *testing.T) {
 			},
 			shouldFail: false,
 		},
+		"incorrect quantity": {
+			pod: &api.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "mypod",
+					Namespace: "namespace",
+					Labels: map[string]string{
+						"security": "S2",
+					},
+				},
+				Spec: api.PodSpec{
+					Containers: []api.Container{
+						{
+							Name: "test",
+							VolumeMounts: []api.VolumeMount{
+								{
+									Name:      volumeName,
+									MountPath: "/mnt/huge",
+								},
+							},
+						},
+					},
+					Volumes: []api.Volume{
+						{
+							Name: volumeName,
+							VolumeSource: api.VolumeSource{
+								HugePages: &api.HugePagesVolumeSource{
+									MaxSize:  "100shouldFailM",
+									PageSize: "2M",
+								},
+							},
+						},
+					},
+				},
+			},
+			shouldFail: true,
+		},
 	}
 
 	for _, test := range tests {
-		err := admitPod(t, plugin, test.pod, volumeName)
+		err := admitPod(plugin, test.pod, volumeName)
 		if err != nil && test.shouldFail == false {
 			t.Error(err)
 		} else if err == nil && test.shouldFail == true {
@@ -176,7 +211,7 @@ func TestAdmitPod(t *testing.T) {
 	}
 }
 
-func admitPod(t *testing.T, plugin *hugePagesMounterPlugin, pod *api.Pod, volumeName string) error {
+func admitPod(plugin *hugePagesMounterPlugin, pod *api.Pod, volumeName string) error {
 	attrs := admission.NewAttributesRecord(
 		pod,
 		nil,
