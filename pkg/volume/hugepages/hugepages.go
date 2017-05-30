@@ -2,15 +2,18 @@ package hugepages
 
 import (
 	"fmt"
+	"io/ioutil"
 	"os"
 	"path"
+	"strconv"
+	"strings"
 
 	"github.com/golang/glog"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/kubernetes/pkg/api/v1"
 	"k8s.io/kubernetes/pkg/util/mount"
-	"k8s.io/kubernetes/pkg/util/strings"
+	strutils "k8s.io/kubernetes/pkg/util/strings"
 	"k8s.io/kubernetes/pkg/volume"
 	volumeutil "k8s.io/kubernetes/pkg/volume/util"
 )
@@ -32,11 +35,12 @@ type hugePagesPlugin struct {
 var _ volume.VolumePlugin = &hugePagesPlugin{}
 
 const (
-	hugePagesPluginName = "kubernetes.io/hugepages"
+	hugePagesPluginName  = "kubernetes.io/hugepages"
+	hugePagesTotalString = "HugePages_Total"
 )
 
 func getPath(uid types.UID, volName string, host volume.VolumeHost) string {
-	return host.GetPodVolumeDir(uid, strings.EscapeQualifiedNameForDisk(hugePagesPluginName), volName)
+	return host.GetPodVolumeDir(uid, strutils.EscapeQualifiedNameForDisk(hugePagesPluginName), volName)
 }
 
 func (plugin *hugePagesPlugin) Init(host volume.VolumeHost) error {
@@ -58,7 +62,33 @@ func (plugin *hugePagesPlugin) GetVolumeName(spec *volume.Spec) (string, error) 
 	return spec.Name(), nil
 }
 
+func detectHugepages() int {
+	data, err := ioutil.ReadFile("/proc/meminfo")
+	if err != nil {
+		return -1
+	}
+
+	for _, line := range strings.Split(string(data), "\n") {
+		if strings.HasPrefix(line, hugePagesTotalString) {
+			// line is representing key-value data in following form 'key: value'
+			lineSplitted := strings.Split(line, ":")
+			if len(lineSplitted) != 2 {
+				return -1
+			}
+			value, err := strconv.Atoi(strings.TrimSpace(lineSplitted[1]))
+			if err != nil {
+				return -1
+			}
+			return value
+		}
+	}
+	return -1
+}
+
 func (plugin *hugePagesPlugin) CanSupport(spec *volume.Spec) bool {
+	if detectHugepages() <= 0 {
+		return false
+	}
 	if spec.Volume != nil && spec.Volume.HugePages != nil {
 		return true
 	}
@@ -264,7 +294,7 @@ func (hp *hugePages) teardownHugePages(dir string) error {
 }
 
 func (hp *hugePages) getMetaDir() string {
-	return path.Join(hp.plugin.host.GetPodPluginDir(hp.pod.UID, strings.EscapeQualifiedNameForDisk(hugePagesPluginName)), hp.volName)
+	return path.Join(hp.plugin.host.GetPodPluginDir(hp.pod.UID, strutils.EscapeQualifiedNameForDisk(hugePagesPluginName)), hp.volName)
 }
 
 func getVolumeSource(spec *volume.Spec) (*v1.HugePagesVolumeSource, bool) {
