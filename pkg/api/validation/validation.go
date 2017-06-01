@@ -394,6 +394,14 @@ func validateVolumeSource(source *api.VolumeSource, fldPath *field.Path) field.E
 			allErrs = append(allErrs, validateHostPathVolumeSource(source.HostPath, fldPath.Child("hostPath"))...)
 		}
 	}
+	if source.HugePages != nil {
+		if numVolumes > 0 {
+			allErrs = append(allErrs, field.Forbidden(fldPath.Child("hugePages"), "may not specify more than 1 volume type"))
+		} else {
+			numVolumes++
+			allErrs = append(allErrs, validateHugePagesVolumeSource(source.HugePages, fldPath.Child("hugePages"))...)
+		}
+	}
 	if source.GitRepo != nil {
 		if numVolumes > 0 {
 			allErrs = append(allErrs, field.Forbidden(fldPath.Child("gitRepo"), "may not specify more than 1 volume type"))
@@ -602,6 +610,32 @@ func validateGitRepoVolumeSource(gitRepo *api.GitRepoVolumeSource, fldPath *fiel
 
 	pathErrs := validateLocalDescendingPath(gitRepo.Directory, fldPath.Child("directory"))
 	allErrs = append(allErrs, pathErrs...)
+	return allErrs
+}
+
+func validateHugePagesVolumeSource(hugePages *api.HugePagesVolumeSource, fldPath *field.Path) field.ErrorList {
+	allErrs := field.ErrorList{}
+	glog.Infof("PageSIze is: %v", hugePages.PageSize)
+	// We only support 2M pageSize
+	if hugePages.PageSize != "2M" {
+		allErrs = append(allErrs, field.Invalid(fldPath.Child("pageSize"), hugePages.PageSize, "Not supported page size"))
+	}
+	maxSize, err := resource.ParseQuantity(hugePages.MaxSize)
+	if err != nil {
+		allErrs = append(allErrs, field.Invalid(fldPath.Child("maxSize"), hugePages.MaxSize, "Not a valid quantity"))
+	} else {
+		if maxSize.ScaledValue(resource.Mega) < 2 {
+			allErrs = append(allErrs, field.Invalid(fldPath.Child("maxSize"), hugePages.MaxSize, "MaxSize lower than pageSize"))
+		}
+	}
+	minSize, err := resource.ParseQuantity(hugePages.MinSize)
+	if err != nil {
+		allErrs = append(allErrs, field.Invalid(fldPath.Child("minSize"), hugePages.MinSize, "Not a valid quantity"))
+	} else {
+		if minSize.ScaledValue(resource.Mega) < 2 {
+			allErrs = append(allErrs, field.Invalid(fldPath.Child("minSize"), hugePages.MinSize, "MaxSize lower than pageSize"))
+		}
+	}
 	return allErrs
 }
 

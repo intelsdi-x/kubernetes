@@ -337,6 +337,9 @@ type VolumeSource struct {
 	// ScaleIO represents a ScaleIO persistent volume attached and mounted on Kubernetes nodes.
 	// +optional
 	ScaleIO *ScaleIOVolumeSource `json:"scaleIO,omitempty" protobuf:"bytes,25,opt,name=scaleIO"`
+	// HugePages represensts a hugepage resource.
+	// +optional
+	HugePages *HugePagesVolumeSource `json:"hugePages,omitempty" protobuf:"bytes,27,opt,name=hugePages"`
 }
 
 // PersistentVolumeClaimVolumeSource references the user's PVC in the same namespace.
@@ -1187,6 +1190,25 @@ type ScaleIOVolumeSource struct {
 	// the ReadOnly setting in VolumeMounts.
 	// +optional
 	ReadOnly bool `json:"readOnly,omitempty" protobuf:"varint,10,opt,name=readOnly"`
+}
+
+// HugePagesSource represents Linux HugeTlbPage https://www.kernel.org/doc/Documentation/vm/hugetlbpage.txt
+type HugePagesVolumeSource struct {
+	// Defaults to 2M
+	// +optional
+	PageSize string `json:"pageSize,omitempty" protobuf:"bytes,1,opt,name=pageSize"`
+	// The size option sets the maximum value of memory (huge pages).
+	// The size option can be specified in bytes, or as a
+	// percentage of the specified huge page pool (nr_hugepages).
+	// You can use [G|g]/[M|m]/[K|k] to represent giga/mega/kilo. For example, size=2K
+	// has the same meaning as size=2048.
+	// +optional
+	MaxSize string `json:"size,omitempty" protobuf:"bytes,2,opt,name=size"`
+	// The min_size option sets the minimum
+	// value of memory (huge pages) allowed for the filesystem.  min_size can be
+	// specified in the same way as size, either bytes or a percentage of the
+	// huge page pool.
+	MinSize string `json:"minSize,omitempty" protobuf:"bytes,3,opt,name=minSize"`
 }
 
 // Adapts a ConfigMap into a volume.
