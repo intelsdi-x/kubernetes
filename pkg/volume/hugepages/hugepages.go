@@ -213,13 +213,18 @@ func (hp *hugePages) setupHugePages(dir string) error {
 		return err
 	}
 
-	options := []string{
+	options := hp.prepareMountOptions()
+
+	return hp.mounter.Mount("nodev", dir, "hugetlbfs", options)
+}
+
+// prepare mount options for hugetlbfs
+func (hp *hugePages) prepareMountOptions() []string {
+	return []string{
 		fmt.Sprintf("size=%s", hp.size),
 		fmt.Sprintf("pagesize=%s", hp.pageSize),
 		fmt.Sprintf("min_size=%s", hp.minSize),
 	}
-
-	return hp.mounter.Mount("nodev", dir, "hugetlbfs", options)
 }
 
 // setupDir creates the directory with the specified SELinux context and
